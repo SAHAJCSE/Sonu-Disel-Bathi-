@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#18181B"/>
+  <rect x="64" y="64" width="384" height="384" rx="48" stroke="#D97706" stroke-width="12" stroke-opacity="0.35"/>
+  <!-- Industrial Bhatti Stand -->
+  <path d="M128 336H384V400H348V364H164V400H128V336Z" fill="#A1A1AA"/>
+  <rect x="116" y="292" width="280" height="44" rx="8" fill="#52525B" stroke="#E4E4E7" stroke-width="6"/>
+  <!-- Burner Ring & Flame -->
+  <path d="M256 108C256 108 328 166 328 224C328 263.765 295.765 284 256 284C216.235 284 184 263.765 184 224C184 166 256 108 256 108Z" fill="#F59E0B"/>
+  <path d="M256 156C256 156 296 194 296 230C296 252.091 278.091 268 256 268C233.909 268 216 252.091 216 230C216 194 256 156 256 156Z" fill="#FEF3C7"/>
+  <!-- Brass Valve -->
+  <circle cx="256" cy="314" r="14" fill="#F59E0B" stroke="#18181B" stroke-width="4"/>
+</svg>

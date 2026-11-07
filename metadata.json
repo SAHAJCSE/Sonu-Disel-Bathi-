@@ -1,0 +1,6 @@
+{
+  "name": "Sonu Diesel Bhatti — Catalogue & Inventory",
+  "description": "Public industrial Diesel Bhatti product catalogue, WhatsApp order receipt generator, and two-admin offline-capable inventory management system.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
