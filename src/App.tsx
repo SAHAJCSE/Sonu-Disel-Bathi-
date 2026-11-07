@@ -537,9 +537,40 @@ function SonuBhattiAppContent() {
       size?: string;
       imageUrl?: string;
       price?: number;
+      stockQuantity?: number;
+      stockNote?: string;
       isActive?: boolean;
     }
   ) => {
+    // 1. Instant optimistic state update so UI responds in <5ms
+    setAdminProducts((prev) => {
+      const updated = prev.map((p) =>
+        p.id === productId
+          ? {
+              ...p,
+              ...(data.name !== undefined ? { name: data.name } : {}),
+              ...(data.size !== undefined ? { size: data.size } : {}),
+              ...(data.imageUrl !== undefined
+                ? { imageUrl: data.imageUrl }
+                : {}),
+              ...(data.price !== undefined ? { price: data.price } : {}),
+              ...(data.stockQuantity !== undefined
+                ? { stockQuantity: data.stockQuantity }
+                : {}),
+              ...(data.isActive !== undefined
+                ? { isActive: data.isActive }
+                : {}),
+              updatedAt: new Date().toISOString(),
+            }
+          : p
+      );
+      writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
+      const activeOnly = updated.filter((p) => p.isActive);
+      setPublicProducts(activeOnly);
+      writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, activeOnly);
+      return updated;
+    });
+
     const clientActionId = `upd_${productId}_${Date.now()}`;
     if (isOnline && authToken) {
       try {
@@ -552,7 +583,7 @@ function SonuBhattiAppContent() {
           body: JSON.stringify({ ...data, clientActionId }),
         });
         if (res.ok) {
-          await fetchAdminDashboard(authToken);
+          void fetchAdminDashboard(authToken);
           return;
         }
       } catch {
@@ -565,14 +596,6 @@ function SonuBhattiAppContent() {
       { productId, ...data },
       `Update product #${productId}`
     );
-    setAdminProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, ...data } : p))
-    );
-    setPublicProducts((prev) =>
-      prev
-        .map((p) => (p.id === productId ? { ...p, ...data } : p))
-        .filter((p) => p.isActive)
-    );
   };
 
   const handleAdjustStock = async (
@@ -581,6 +604,25 @@ function SonuBhattiAppContent() {
     amount: number,
     note?: string
   ) => {
+    // 1. Instant optimistic stock update
+    setAdminProducts((prev) => {
+      const updated = prev.map((p) => {
+        if (p.id !== productId) return p;
+        const nextQty =
+          actionType === 'ADD'
+            ? p.stockQuantity + amount
+            : actionType === 'REMOVE'
+            ? Math.max(0, p.stockQuantity - amount)
+            : Math.max(0, amount);
+        return { ...p, stockQuantity: nextQty, updatedAt: new Date().toISOString() };
+      });
+      writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
+      const activeOnly = updated.filter((p) => p.isActive);
+      setPublicProducts(activeOnly);
+      writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, activeOnly);
+      return updated;
+    });
+
     const clientActionId = `stk_${productId}_${Date.now()}`;
     if (isOnline && authToken) {
       try {
@@ -593,7 +635,7 @@ function SonuBhattiAppContent() {
           body: JSON.stringify({ actionType, amount, note, clientActionId }),
         });
         if (res.ok) {
-          await fetchAdminDashboard(authToken);
+          void fetchAdminDashboard(authToken);
           return;
         } else {
           const errData = await res.json();
@@ -604,35 +646,38 @@ function SonuBhattiAppContent() {
       }
     }
 
-    // Offline optimistic stock adjustment
     enqueueOfflineAction(
       'ADJUST_STOCK',
       { productId, actionType, amount, note },
       `${actionType} stock on #${productId}`
     );
-
-    setAdminProducts((prev) =>
-      prev.map((p) => {
-        if (p.id !== productId) return p;
-        const nextQty =
-          actionType === 'ADD'
-            ? p.stockQuantity + amount
-            : actionType === 'REMOVE'
-            ? Math.max(0, p.stockQuantity - amount)
-            : Math.max(0, amount);
-        return { ...p, stockQuantity: nextQty };
-      })
-    );
   };
 
   const handleDeleteProduct = async (productId: number) => {
-    if (!isOnline || !authToken) return;
-    const res = await fetch(`/api/admin/products/${productId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` },
+    // 1. Instant optimistic removal from Admin, Public, and Cart states
+    setAdminProducts((prev) => {
+      const updated = prev.filter((p) => p.id !== productId);
+      writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
+      return updated;
     });
-    if (res.ok) {
-      await fetchAdminDashboard(authToken);
+    setPublicProducts((prev) => {
+      const updated = prev.filter((p) => p.id !== productId);
+      writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, updated);
+      return updated;
+    });
+    setCart((prev) => prev.filter((item) => item.product.id !== productId));
+
+    if (!isOnline || !authToken) return;
+    try {
+      const res = await fetch(`/api/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        void fetchAdminDashboard(authToken);
+      }
+    } catch {
+      // Optimistic removal already applied
     }
   };
 

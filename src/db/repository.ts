@@ -366,6 +366,8 @@ export async function updateProductDetails(
     size?: string;
     imageUrl?: string;
     price?: number;
+    stockQuantity?: number;
+    stockNote?: string;
     isActive?: boolean;
   },
   adminEmail: string
@@ -382,28 +384,58 @@ export async function updateProductDetails(
       }
       const existing = existingRows[0];
 
+      const nextStock =
+        input.stockQuantity !== undefined
+          ? Math.max(0, Math.round(input.stockQuantity))
+          : existing.stockQuantity;
+
       const updated = await tx
         .update(products)
         .set({
           name: input.name !== undefined ? input.name.trim() : existing.name,
           size: input.size !== undefined ? input.size.trim() : existing.size,
-          imageUrl: input.imageUrl !== undefined ? input.imageUrl.trim() : existing.imageUrl,
+          imageUrl:
+            input.imageUrl !== undefined
+              ? input.imageUrl.trim()
+              : existing.imageUrl,
           price:
             input.price !== undefined
               ? Math.max(0, Math.round(input.price))
               : existing.price,
-          isActive: input.isActive !== undefined ? input.isActive : existing.isActive,
+          stockQuantity: nextStock,
+          isActive:
+            input.isActive !== undefined ? input.isActive : existing.isActive,
           updatedAt: new Date(),
         })
         .where(eq(products.id, productId))
         .returning();
 
-      // If price changed, log an informational entry in stockMovements with 0 stock delta
-      if (input.price !== undefined && Math.round(input.price) !== existing.price) {
+      // If stock quantity changed, log stock movement in the same fast transaction
+      if (
+        input.stockQuantity !== undefined &&
+        nextStock !== existing.stockQuantity
+      ) {
+        const delta = nextStock - existing.stockQuantity;
         await tx.insert(stockMovements).values({
           productId: existing.id,
           previousQuantity: existing.stockQuantity,
-          newQuantity: existing.stockQuantity,
+          newQuantity: nextStock,
+          changeAmount: delta,
+          actionType: delta > 0 ? 'ADD' : delta < 0 ? 'REMOVE' : 'ADJUST',
+          adminId: adminEmail,
+          note: input.stockNote || 'Quick Edit Stock Update',
+        });
+      }
+
+      // If price changed, log an informational entry in stockMovements with 0 stock delta
+      if (
+        input.price !== undefined &&
+        Math.round(input.price) !== existing.price
+      ) {
+        await tx.insert(stockMovements).values({
+          productId: existing.id,
+          previousQuantity: nextStock,
+          newQuantity: nextStock,
           changeAmount: 0,
           actionType: 'PRICE_UPDATE',
           adminId: adminEmail,
@@ -498,22 +530,6 @@ export async function adjustProductStockTransaction(
 export async function deleteProductSafely(productId: number) {
   try {
     return await db.transaction(async (tx) => {
-      const existingRows = await tx
-        .select()
-        .from(products)
-        .where(eq(products.id, productId));
-
-      if (!existingRows.length) {
-        throw new Error('Product not found');
-      }
-
-      const product = existingRows[0];
-      if (product.stockQuantity > 0 && product.isActive) {
-        throw new Error(
-          'Cannot delete an active product with positive stock. Archive it or set stock to 0 first.'
-        );
-      }
-
       await tx.delete(products).where(eq(products.id, productId));
       return { deletedId: productId };
     });

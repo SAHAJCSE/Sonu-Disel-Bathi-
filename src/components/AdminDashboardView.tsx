@@ -1,19 +1,20 @@
 import React, { useState, useRef, useMemo, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Package,
   Layers,
   AlertTriangle,
   History,
   Plus,
+  Minus,
   Edit3,
-  Archive,
   RotateCcw,
   Trash2,
   Settings,
   LogOut,
   RefreshCw,
-  Camera,
   Check,
+  CheckCircle2,
   X,
   ArrowUpRight,
   ArrowDownRight,
@@ -64,6 +65,8 @@ interface AdminDashboardViewProps {
       size?: string;
       imageUrl?: string;
       price?: number;
+      stockQuantity?: number;
+      stockNote?: string;
       isActive?: boolean;
     }
   ) => Promise<void>;
@@ -137,12 +140,49 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [stockNote, setStockNote] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Edit Product Modal State
+  // Unified Fast Edit Product & Stock Modal State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editName, setEditName] = useState('');
   const [editSize, setEditSize] = useState('Medium');
   const [editPrice, setEditPrice] = useState('');
+  const [editStock, setEditStock] = useState('');
+  const [editStockNote, setEditStockNote] = useState('');
+  const [editIsActive, setEditIsActive] = useState(true);
   const [editImage, setEditImage] = useState('');
+
+  // Fast Delete Row Flash & Notification Pop-up State
+  const [deletingProductId, setDeletingProductId] = useState<number | null>(
+    null
+  );
+  const [actionPopup, setActionPopup] = useState<{
+    id: number;
+    type: 'deleted' | 'updated' | 'restored';
+    title: string;
+    subtitle: string;
+    productSnapshot?: Product;
+  } | null>(null);
+  const popupTimerRef = useRef<number | null>(null);
+
+  const triggerActionPopup = useCallback(
+    (popup: {
+      type: 'deleted' | 'updated' | 'restored';
+      title: string;
+      subtitle: string;
+      productSnapshot?: Product;
+    }) => {
+      if (popupTimerRef.current) {
+        window.clearTimeout(popupTimerRef.current);
+      }
+      setActionPopup({
+        id: Date.now(),
+        ...popup,
+      });
+      popupTimerRef.current = window.setTimeout(() => {
+        setActionPopup(null);
+      }, 4200);
+    },
+    []
+  );
 
   // Quick Add Product Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -290,6 +330,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setEditName(product.name);
     setEditSize(product.size);
     setEditPrice(String(product.price));
+    setEditStock(String(product.stockQuantity));
+    setEditStockNote('');
+    setEditIsActive(product.isActive);
     setEditImage(product.imageUrl);
     setActionError(null);
   };
@@ -298,22 +341,82 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     e.preventDefault();
     if (!editingProduct) return;
     const priceNum = Number(editPrice);
-    if (!editName.trim() || !editImage.trim() || isNaN(priceNum) || priceNum <= 0) {
+    const stockNum = Number(editStock);
+    if (
+      !editName.trim() ||
+      !editImage.trim() ||
+      isNaN(priceNum) ||
+      priceNum <= 0 ||
+      isNaN(stockNum) ||
+      stockNum < 0
+    ) {
       setActionError(t('validationAllFieldsReq'));
       return;
     }
 
+    const targetId = editingProduct.id;
+    const updatedName = editName.trim();
+    const updatedSize = editSize;
+    const updatedPrice = Math.round(priceNum);
+    const updatedStock = Math.round(stockNum);
+
+    // Close modal immediately for 0ms perceived latency
+    setEditingProduct(null);
+    triggerActionPopup({
+      type: 'updated',
+      title: 'Product & Stock Updated',
+      subtitle: `${updatedName} (${updatedSize}) · ₹${updatedPrice.toLocaleString(
+        'en-IN'
+      )} · Stock: ${updatedStock}`,
+    });
+
     try {
-      await onUpdateProduct(editingProduct.id, {
-        name: editName.trim(),
-        size: editSize,
-        price: Math.round(priceNum),
+      await onUpdateProduct(targetId, {
+        name: updatedName,
+        size: updatedSize,
+        price: updatedPrice,
+        stockQuantity: updatedStock,
+        stockNote: editStockNote.trim() || 'Quick Edit Product & Stock',
+        isActive: editIsActive,
         imageUrl: editImage,
       });
-      setEditingProduct(null);
     } catch (err: any) {
       setActionError(err.message || 'Failed to update product');
     }
+  };
+
+  const handleQuickDeleteProduct = (product: Product) => {
+    setDeletingProductId(product.id);
+    // Show immediate notification pop-up with quick effect + Undo option
+    triggerActionPopup({
+      type: 'deleted',
+      title: 'Product Deleted',
+      subtitle: `${product.name} (${product.size}) removed from inventory`,
+      productSnapshot: product,
+    });
+
+    // Brief 110ms visual shrink/flash effect before removing row
+    window.setTimeout(() => {
+      setDeletingProductId((prev) => (prev === product.id ? null : prev));
+      void onDeleteProduct(product.id);
+    }, 110);
+  };
+
+  const handleUndoDelete = async (snapshot: Product) => {
+    setActionPopup(null);
+    triggerActionPopup({
+      type: 'restored',
+      title: 'Product Restored',
+      subtitle: `${snapshot.name} (${snapshot.size}) restored to inventory`,
+    });
+    await onCreateProduct({
+      name: snapshot.name,
+      size: snapshot.size,
+      imageUrl: snapshot.imageUrl,
+      price: snapshot.price,
+      stockQuantity: snapshot.stockQuantity,
+      note: 'Restored after quick delete',
+    });
   };
 
   const handleSaveAddModal = async (e: React.FormEvent) => {
@@ -675,11 +778,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   const isLow =
                     product.stockQuantity <=
                     (settings.lowStockThreshold || 10);
+                  const isBeingDeleted = deletingProductId === product.id;
                   return (
                     <tr
                       key={product.id}
-                      className={`hover:bg-stone-50/80 transition-colors ${
-                        !product.isActive ? 'opacity-60 bg-stone-50/40' : ''
+                      className={`transition-all duration-150 ${
+                        isBeingDeleted
+                          ? 'bg-red-100/90 scale-[0.98] opacity-0 -translate-x-4'
+                          : !product.isActive
+                          ? 'opacity-60 bg-stone-50/40 hover:bg-stone-50/80'
+                          : 'hover:bg-stone-50/80'
                       }`}
                     >
                       <td className="py-3.5 px-4">
@@ -716,74 +824,67 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         ₹{product.price.toLocaleString('en-IN')}
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono tabular-nums whitespace-nowrap">
-                        <span
-                          className={`font-extrabold ${
-                            product.stockQuantity === 0
-                              ? 'text-red-600'
-                              : isLow
-                              ? 'text-amber-700'
-                              : 'text-zinc-900'
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(product)}
+                          title="Click to quickly edit stock & product"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-zinc-200/80 transition-colors cursor-pointer"
                         >
-                          {product.stockQuantity}
-                        </span>
-                        <span className="text-xs text-zinc-500 ml-1">
-                          units
-                        </span>
+                          <span
+                            className={`font-extrabold ${
+                              product.stockQuantity === 0
+                                ? 'text-red-600'
+                                : isLow
+                                ? 'text-amber-700'
+                                : 'text-zinc-900'
+                            }`}
+                          >
+                            {product.stockQuantity}
+                          </span>
+                          <span className="text-xs text-zinc-500">units</span>
+                        </button>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-zinc-600 whitespace-nowrap">
-                        {product.isActive
-                          ? t('statusActive')
-                          : t('statusArchived')}
+                        <span
+                          className={`inline-flex items-center gap-1.5 font-semibold ${
+                            product.isActive
+                              ? 'text-emerald-700'
+                              : 'text-zinc-500'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              product.isActive
+                                ? 'bg-emerald-500'
+                                : 'bg-zinc-400'
+                            }`}
+                          />
+                          {product.isActive
+                            ? t('statusActive')
+                            : t('statusArchived')}
+                        </span>
                       </td>
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => openStockModal(product, 'ADD')}
-                            className="px-2.5 py-1.5 rounded-md bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 cursor-pointer"
-                          >
-                            {t('updateStockBtn')}
-                          </button>
+                        {/* Strictly ONLY fast Edit and Delete buttons */}
+                        <div className="inline-flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => openEditModal(product)}
-                            className="p-1.5 rounded-md border border-zinc-300 text-zinc-700 hover:bg-stone-100 cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:scale-95 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition-all duration-100 cursor-pointer"
                             title={t('editProductBtn')}
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Edit</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              onUpdateProduct(product.id, {
-                                isActive: !product.isActive,
-                              })
-                            }
-                            className="p-1.5 rounded-md border border-zinc-300 text-zinc-700 hover:bg-stone-100 cursor-pointer"
-                            title={
-                              product.isActive
-                                ? t('archiveProductBtn')
-                                : t('reactivateProductBtn')
-                            }
+                            onClick={() => handleQuickDeleteProduct(product)}
+                            className="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 active:scale-95 text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition-all duration-100 cursor-pointer"
+                            title={t('deleteProductBtn')}
                           >
-                            {product.isActive ? (
-                              <Archive className="w-3.5 h-3.5" />
-                            ) : (
-                              <RotateCcw className="w-3.5 h-3.5 text-emerald-600" />
-                            )}
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
                           </button>
-                          {(!product.isActive ||
-                            product.stockQuantity === 0) && (
-                            <button
-                              type="button"
-                              onClick={() => onDeleteProduct(product.id)}
-                              className="p-1.5 rounded-md border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
-                              title={t('deleteProductBtn')}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -805,7 +906,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               clearSignal={adminClearSignal}
               isAdminMode={true}
               onAdminEdit={(p) => openEditModal(p)}
-              onAdminStockAdjust={(p) => openStockModal(p, 'ADD')}
+              onAdminDelete={(p) => handleQuickDeleteProduct(p)}
             />
           )}
         </div>
@@ -1213,15 +1314,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* =================================================================== */}
-      {/* MODAL: EDIT PRODUCT DETAILS & REPLACE PHOTOGRAPH                    */}
+      {/* MODAL: UNIFIED FAST EDIT PRODUCT DETAILS, STOCK & PHOTOGRAPH        */}
       {/* =================================================================== */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-xl bg-white border border-zinc-200 p-6 shadow-xl space-y-4 my-auto">
             <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-              <h3 className="text-base font-bold text-zinc-900">
-                {t('editProductBtn')}: {editingProduct.name}
-              </h3>
+              <div>
+                <h3 className="text-base font-bold text-zinc-900">
+                  {t('editProductBtn')}: {editingProduct.name}
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Fast-update product details, price, photo, and available stock in one step.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setEditingProduct(null)}
@@ -1257,7 +1363,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 text-sm text-zinc-900"
+                  className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 text-sm text-zinc-900"
                 />
               </div>
 
@@ -1269,7 +1375,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <select
                     value={editSize}
                     onChange={(e) => setEditSize(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 text-sm bg-white text-zinc-900"
+                    className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 text-sm bg-white text-zinc-900"
                   >
                     <option value="Small">Small</option>
                     <option value="Medium">Medium</option>
@@ -1280,7 +1386,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 mb-1">
-                    {t('productPriceLabel')}
+                    {t('productPriceLabel')} (₹)
                   </label>
                   <input
                     type="number"
@@ -1288,25 +1394,130 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     min={1}
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-zinc-300 text-sm font-mono tabular-nums text-zinc-900"
+                    className="w-full px-3.5 py-2 rounded-lg border border-zinc-300 text-sm font-mono tabular-nums text-zinc-900"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              {/* Fast Stock Quantity Control inside Edit Modal */}
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-zinc-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-800">
+                    {t('stockAvailable')} (Current: {editingProduct.stockQuantity})
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[-10, -5, -1, 1, 5, 10].map((delta) => (
+                      <button
+                        key={delta}
+                        type="button"
+                        onClick={() =>
+                          setEditStock((prev) =>
+                            String(Math.max(0, (Number(prev) || 0) + delta))
+                          )
+                        }
+                        className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold border transition-transform active:scale-95 cursor-pointer ${
+                          delta > 0
+                            ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : 'bg-stone-200/70 hover:bg-stone-300/70 text-zinc-700 border-zinc-300'
+                        }`}
+                      >
+                        {delta > 0 ? `+${delta}` : delta}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditStock((prev) =>
+                          String(Math.max(0, (Number(prev) || 0) - 1))
+                        )
+                      }
+                      className="w-9 h-9 rounded-lg border border-zinc-300 bg-white hover:bg-stone-100 flex items-center justify-center text-zinc-700 cursor-pointer shrink-0"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      value={editStock}
+                      onChange={(e) => setEditStock(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white text-sm font-mono tabular-nums font-bold text-center text-zinc-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditStock((prev) =>
+                          String(Math.max(0, (Number(prev) || 0) + 1))
+                        )
+                      }
+                      className="w-9 h-9 rounded-lg bg-zinc-900 hover:bg-zinc-800 flex items-center justify-center text-white cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={editStockNote}
+                    onChange={(e) => setEditStockNote(e.target.value)}
+                    placeholder="Optional stock note..."
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white text-xs text-zinc-800"
+                  />
+                </div>
+              </div>
+
+              {/* Public Catalogue Visibility Toggle */}
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-stone-50 border border-zinc-200">
+                <span className="text-xs font-semibold text-zinc-700">
+                  Catalogue Visibility Status
+                </span>
                 <button
                   type="button"
-                  onClick={() => setEditingProduct(null)}
-                  className="px-4 py-2 rounded-lg border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer"
+                  onClick={() => setEditIsActive((prev) => !prev)}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                    editIsActive
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-zinc-300 text-zinc-800'
+                  }`}
                 >
-                  {t('cancelBtn')}
+                  {editIsActive ? t('statusActive') : t('statusArchived')}
                 </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-200">
                 <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    const prodToDelete = editingProduct;
+                    setEditingProduct(null);
+                    handleQuickDeleteProduct(prodToDelete);
+                  }}
+                  className="px-3.5 py-2 rounded-lg bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  {t('saveProductBtn')}
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Product</span>
                 </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProduct(null)}
+                    className="px-4 py-2 rounded-lg border border-zinc-300 text-xs font-semibold text-zinc-700 cursor-pointer"
+                  >
+                    {t('cancelBtn')}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold cursor-pointer"
+                  >
+                    {t('saveProductBtn')}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1500,6 +1711,123 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* =================================================================== */}
+      {/* FLOATING ANIMATED NOTIFICATION POP-UP (DELETE / EDIT / RESTORE)     */}
+      {/* =================================================================== */}
+      <AnimatePresence>
+        {actionPopup && (
+          <motion.div
+            key={actionPopup.id}
+            initial={{ opacity: 0, y: 28, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.94 }}
+            transition={{
+              type: 'spring',
+              stiffness: 420,
+              damping: 26,
+            }}
+            className="fixed bottom-5 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] max-w-md rounded-2xl bg-zinc-950 text-white border border-zinc-800 shadow-[0_20px_50px_rgba(0,0,0,0.45)] overflow-hidden"
+          >
+            <div className="p-4 flex items-center gap-3.5">
+              {/* Animated Icon or Product Thumbnail */}
+              <div className="relative shrink-0">
+                {actionPopup.productSnapshot ? (
+                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900">
+                    <ProductImage
+                      src={actionPopup.productSnapshot.imageUrl}
+                      alt={actionPopup.productSnapshot.name}
+                      sizeLabel={actionPopup.productSnapshot.size}
+                    />
+                  </div>
+                ) : null}
+                <motion.div
+                  initial={{ scale: 0.4, rotate: -20 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                  className={`flex items-center justify-center rounded-full shadow-md ${
+                    actionPopup.productSnapshot
+                      ? 'absolute -bottom-1 -right-1 w-6 h-6 border-2 border-zinc-950'
+                      : 'w-10 h-10'
+                  } ${
+                    actionPopup.type === 'deleted'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-emerald-500 text-zinc-950'
+                  }`}
+                >
+                  {actionPopup.type === 'deleted' ? (
+                    <Trash2
+                      className={
+                        actionPopup.productSnapshot ? 'w-3 h-3' : 'w-5 h-5'
+                      }
+                    />
+                  ) : (
+                    <CheckCircle2
+                      className={
+                        actionPopup.productSnapshot ? 'w-3.5 h-3.5' : 'w-5 h-5'
+                      }
+                    />
+                  )}
+                </motion.div>
+              </div>
+
+              {/* Notification Copy */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-xs font-extrabold tracking-wide uppercase ${
+                      actionPopup.type === 'deleted'
+                        ? 'text-red-400'
+                        : 'text-emerald-400'
+                    }`}
+                  >
+                    {actionPopup.title}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-300 truncate mt-0.5">
+                  {actionPopup.subtitle}
+                </p>
+              </div>
+
+              {/* Quick Undo Button when Deleted */}
+              {actionPopup.type === 'deleted' &&
+                actionPopup.productSnapshot && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleUndoDelete(actionPopup.productSnapshot!)
+                    }
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 text-xs font-extrabold inline-flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Undo</span>
+                  </button>
+                )}
+
+              <button
+                type="button"
+                onClick={() => setActionPopup(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 cursor-pointer shrink-0"
+                aria-label="Dismiss notification"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Animated 4.2s Countdown Progress Strip */}
+            <motion.div
+              initial={{ width: '100%' }}
+              animate={{ width: '0%' }}
+              transition={{ duration: 4.2, ease: 'linear' }}
+              className={`h-1 ${
+                actionPopup.type === 'deleted'
+                  ? 'bg-red-500'
+                  : 'bg-emerald-500'
+              }`}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

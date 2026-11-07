@@ -10,7 +10,7 @@ import {
   LayoutGrid,
   Layers,
   Edit3,
-  Sliders,
+  Trash2,
   RotateCcw,
 } from 'lucide-react';
 import { CartItem, Product } from '../types.ts';
@@ -31,7 +31,7 @@ interface SequentialShowcaseCardsProps {
   // Optional Admin actions when used inside Admin Dashboard
   isAdminMode?: boolean;
   onAdminEdit?: (product: Product) => void;
-  onAdminStockAdjust?: (product: Product) => void;
+  onAdminDelete?: (product: Product) => void;
 }
 
 const FAVORITES_STORAGE_KEY = 'sdb_showcase_favorites_v1';
@@ -76,7 +76,7 @@ export const SequentialShowcaseCards: React.FC<
   clearSignal = 0,
   isAdminMode = false,
   onAdminEdit,
-  onAdminStockAdjust,
+  onAdminDelete,
 }) => {
   const { t, translateSize } = useTranslation();
 
@@ -285,19 +285,21 @@ export const SequentialShowcaseCards: React.FC<
                   type="button"
                   onClick={() => onAdminEdit(product)}
                   title={t('editProductBtn')}
-                  className="w-8 h-8 sm:w-11 sm:h-11 rounded-[12px] sm:rounded-[16px] bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center transition-transform active:scale-95 cursor-pointer"
+                  className="px-2.5 sm:px-3.5 h-8 sm:h-10 rounded-[12px] sm:rounded-[14px] bg-[#EDEDED] hover:bg-white text-[#1E1E20] text-[11px] sm:text-xs font-extrabold inline-flex items-center gap-1 shadow-sm transition-transform duration-100 hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  <Edit3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Edit</span>
                 </button>
               )}
-              {onAdminStockAdjust && (
+              {onAdminDelete && (
                 <button
                   type="button"
-                  onClick={() => onAdminStockAdjust(product)}
-                  title={t('updateStockBtn')}
-                  className="w-9 h-9 sm:w-13 sm:h-13 rounded-[12px] sm:rounded-[18px] bg-[#EDEDED] hover:bg-white text-[#1E1E20] flex items-center justify-center shadow-md transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer"
+                  onClick={() => onAdminDelete(product)}
+                  title={t('deleteProductBtn')}
+                  className="px-2.5 sm:px-3.5 h-8 sm:h-10 rounded-[12px] sm:rounded-[14px] bg-red-600 hover:bg-red-500 text-white text-[11px] sm:text-xs font-extrabold inline-flex items-center gap-1 shadow-sm transition-transform duration-100 hover:scale-105 active:scale-95 cursor-pointer"
                 >
-                  <Sliders className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Delete</span>
                 </button>
               )}
             </div>

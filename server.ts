@@ -408,7 +408,16 @@ app.post('/api/admin/products', requireAuth, async (req: AuthRequest, res: Respo
 app.put('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const productId = Number(req.params.id);
-    const { name, size, imageUrl, price, isActive, clientActionId } = req.body;
+    const {
+      name,
+      size,
+      imageUrl,
+      price,
+      stockQuantity,
+      stockNote,
+      isActive,
+      clientActionId,
+    } = req.body;
 
     if (clientActionId && processedOfflineIds.has(clientActionId)) {
       return res.json({ deduplicated: true });
@@ -421,6 +430,9 @@ app.put('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res: Re
         size: size !== undefined ? String(size) : undefined,
         imageUrl: imageUrl !== undefined ? String(imageUrl) : undefined,
         price: price !== undefined ? Number(price) : undefined,
+        stockQuantity:
+          stockQuantity !== undefined ? Number(stockQuantity) : undefined,
+        stockNote: stockNote !== undefined ? String(stockNote) : undefined,
         isActive: isActive !== undefined ? Boolean(isActive) : undefined,
       },
       req.admin!.email
