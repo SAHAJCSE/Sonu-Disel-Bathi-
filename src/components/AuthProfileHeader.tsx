@@ -94,7 +94,7 @@ export const AuthProfileHeader: React.FC<AuthProfileHeaderProps> = ({
           </div>
           <div className="text-[10px] font-semibold flex items-center gap-1">
             {isAdmin ? (
-              <span className="text-amber-400 flex items-center gap-0.5">
+              <span className="text-[#00C1FD] flex items-center gap-0.5">
                 <ShieldCheck className="w-2.5 h-2.5" />
                 <span>Admin</span>
               </span>
@@ -145,7 +145,7 @@ export const AuthProfileHeader: React.FC<AuthProfileHeaderProps> = ({
                   </div>
                   <div className="mt-1">
                     {isAdmin ? (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] font-bold border border-amber-500/30 inline-flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 rounded bg-[#00C1FD]/20 text-[#00C1FD] font-mono text-[9px] font-bold border border-[#00C1FD]/30 inline-flex items-center gap-1">
                         <ShieldCheck className="w-2.5 h-2.5" />
                         <span>Administrator</span>
                       </span>
@@ -189,15 +189,15 @@ export const AuthProfileHeader: React.FC<AuthProfileHeaderProps> = ({
                     }}
                     className={`w-full px-3 py-2 rounded-xl text-left text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
                       isAdminPortalOpen
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        ? 'bg-[#00C1FD]/20 text-[#00C1FD] border border-[#00C1FD]/30'
                         : 'hover:bg-zinc-800 text-zinc-200 hover:text-white'
                     }`}
                   >
                     <span className="flex items-center gap-2">
-                      <SlidersHorizontal className="w-4 h-4 text-amber-400" />
+                      <SlidersHorizontal className="w-4 h-4 text-[#00C1FD]" />
                       <span>Admin Management Portal</span>
                     </span>
-                    <span className="text-[10px] font-bold text-amber-400">
+                    <span className="text-[10px] font-bold text-[#00C1FD]">
                       {isAdminPortalOpen ? 'Active' : 'Open'}
                     </span>
                   </button>

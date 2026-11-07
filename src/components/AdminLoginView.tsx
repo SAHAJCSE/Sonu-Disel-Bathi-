@@ -147,7 +147,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
 
       <div className="rounded-xl bg-white border border-zinc-200 p-6 sm:p-8 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-zinc-900 text-amber-500 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-zinc-900 text-[#00C1FD] flex items-center justify-center shrink-0">
             <ShieldCheck className="w-5 h-5" />
           </div>
           <div>
@@ -164,7 +164,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
         {authorizedSlots.length > 0 && (
           <div className="mb-5 p-3.5 rounded-lg bg-stone-50 border border-stone-200">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-600 mb-2">
-              <Users className="w-3.5 h-3.5 text-amber-600" />
+              <Users className="w-3.5 h-3.5 text-[#00C1FD]" />
               <span>{t('authorizedSlotsTitle')}</span>
             </div>
             <div className="grid grid-cols-1 gap-1.5">

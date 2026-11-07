@@ -94,7 +94,7 @@ export const PWAInstallButton: React.FC = () => {
                     </span>
                     <span>Instant Native Android Installation (WebAPK)</span>
                   </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00C1FD]/20 text-[#00C1FD] font-bold border border-[#00C1FD]/30">
                     Recommended
                   </span>
                 </div>
@@ -151,7 +151,7 @@ export const PWAInstallButton: React.FC = () => {
               {/* Method 3: CLI Bubblewrap */}
               <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800/80 space-y-1.5">
                 <span className="font-mono text-[11px] font-bold text-zinc-300 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  <Layers className="w-3.5 h-3.5 text-[#00C1FD]" />
                   <span>Developer CLI Command (Google Bubblewrap):</span>
                 </span>
                 <pre className="p-2.5 rounded-lg bg-black/60 text-[10px] font-mono text-emerald-400 overflow-x-auto border border-zinc-800">

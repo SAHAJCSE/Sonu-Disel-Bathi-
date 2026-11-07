@@ -47,7 +47,7 @@ export const LiveNotificationCenter: React.FC<LiveNotificationCenterProps> = ({
       case 'status':
         return <Package className="w-4 h-4 text-emerald-400" />;
       case 'stock':
-        return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+        return <AlertTriangle className="w-4 h-4 text-[#00C1FD]" />;
       case 'announcement':
         return <Sparkles className="w-4 h-4 text-sky-400" />;
       default:
@@ -224,7 +224,7 @@ export const LiveNotificationCenter: React.FC<LiveNotificationCenterProps> = ({
                         </p>
                         {notif.referenceId && (
                           <div className="mt-1.5 flex items-center gap-2">
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-amber-300 border border-zinc-700">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-[#00C1FD] border border-zinc-700">
                               Ref: {notif.referenceId}
                             </span>
                           </div>

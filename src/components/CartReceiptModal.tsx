@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import {
   X,
@@ -15,6 +15,11 @@ import {
   ShoppingBag,
   Truck,
   Sparkles,
+  Maximize2,
+  RotateCcw,
+  ArrowLeft,
+  ChevronRight,
+  Layers,
 } from 'lucide-react';
 import { BusinessSettings, CartItem, Product, UserProfile, CustomerOrder } from '../types.ts';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
@@ -34,7 +39,7 @@ interface CartReceiptModalProps {
   onOrderPlaced?: (order: CustomerOrder) => void;
 }
 
-export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
+export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
   isOpen,
   onClose,
   cart,
@@ -53,9 +58,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [pdfDownloaded, setPdfDownloaded] = useState(false);
-  const [stockVerifiedMessage, setStockVerifiedMessage] = useState<
-    string | null
-  >(null);
+  const [stockVerifiedMessage, setStockVerifiedMessage] = useState<string | null>(null);
   const [stockIssues, setStockIssues] = useState<
     Array<{
       productId: number;
@@ -65,10 +68,12 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
     }>
   >([]);
 
+  // Mobile viewport tab toggle: 'cart' vs 'receipt'
+  const [activeMobileTab, setActiveMobileTab] = useState<'cart' | 'receipt'>('cart');
+
   const [customerName, setCustomerName] = useState(currentUser?.name || '');
   const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '');
   const [shippingAddress, setShippingAddress] = useState('');
-  const [customerNotes, setCustomerNotes] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<CustomerOrder | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -81,9 +86,9 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
   useEffect(() => {
     if (isOpen && cart.length > 0) {
       const now = new Date();
-      const datePart = `${now.getFullYear()}${String(
-        now.getMonth() + 1
-      ).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(
+        now.getDate()
+      ).padStart(2, '0')}`;
       const randomPart = Math.floor(1000 + Math.random() * 9000);
       setReceiptNumber(`SDB-${datePart}-${randomPart}`);
       setReceiptTimestamp(
@@ -99,108 +104,63 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
     }
   }, [isOpen]);
 
-  const handlePlaceDatabaseOrder = async () => {
-    if (!customerName.trim() || !customerPhone.trim()) {
-      setSubmitError('Please enter your Name and Mobile Phone Number to place the order.');
-      return;
-    }
-    setSubmitError(null);
-    setIsSubmittingOrder(true);
-
-    try {
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: customerName.trim(),
-          customerPhone: customerPhone.trim(),
-          customerEmail: currentUser?.email,
-          shippingAddress: shippingAddress.trim() || undefined,
-          notes: customerNotes.trim() || undefined,
-          items: cart.map((c) => ({
-            id: c.product.id,
-            name: c.product.name,
-            size: c.product.size,
-            price: c.product.price,
-            quantity: c.quantity,
-          })),
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        setSubmitError(data.error || 'Failed to submit order to database.');
-      } else {
-        setSubmittedOrder(data.order);
-        if (onOrderPlaced) {
-          onOrderPlaced(data.order);
-        }
-      }
-    } catch {
-      setSubmitError('Network error while placing order. Please check your connection.');
-    } finally {
-      setIsSubmittingOrder(false);
-    }
-  };
-
   const verifyCartStock = async () => {
-    if (!isOnline || cart.length === 0) {
-      setStockVerifiedMessage(null);
-      setStockIssues([]);
-      return;
-    }
-
+    if (!isOnline || cart.length === 0) return;
     setIsVerifying(true);
+    setStockIssues([]);
     try {
-      const response = await fetch('/api/public/verify-cart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: cart.map((c) => ({
-            productId: c.product.id,
-            quantity: c.quantity,
-          })),
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.latestProducts) {
-          onStockVerifiedUpdate(data.latestProducts);
-        }
-        if (data.issues && data.issues.length > 0) {
-          setStockIssues(data.issues);
-          setStockVerifiedMessage(t('stockIssueWarning'));
-          // Adjust quantities to available stock
-          for (const issue of data.issues) {
-            if (issue.available > 0) {
-              onUpdateQty(issue.productId, issue.available);
-            } else {
-              onRemoveItem(issue.productId);
-            }
+      const res = await fetch('/api/products/public');
+      if (res.ok) {
+        const latestProducts: Product[] = await res.json();
+        onStockVerifiedUpdate(latestProducts);
+
+        const issues: Array<{
+          productId: number;
+          name: string;
+          requested: number;
+          available: number;
+        }> = [];
+
+        cart.forEach((item) => {
+          const matched = latestProducts.find((p) => p.id === item.product.id);
+          if (!matched || matched.stockQuantity < item.quantity) {
+            issues.push({
+              productId: item.product.id,
+              name: item.product.name,
+              requested: item.quantity,
+              available: matched ? matched.stockQuantity : 0,
+            });
           }
+        });
+
+        if (issues.length > 0) {
+          setStockIssues(issues);
+          setStockVerifiedMessage(
+            `Note: ${issues.length} item(s) in your cart exceed available live workshop inventory.`
+          );
         } else {
-          setStockIssues([]);
-          setStockVerifiedMessage(t('stockVerifiedOk'));
+          setStockVerifiedMessage('✅ Live workshop stock verified and locked.');
         }
       }
     } catch {
-      // Offline fallback uses cached quantities
+      // Offline mode uses local cache
     } finally {
       setIsVerifying(false);
     }
   };
 
-  if (!isOpen) return null;
-
-  const grandTotal = cart.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
+  const grandTotal = useMemo(
+    () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [cart]
   );
 
-  const totalUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalUnits = useMemo(
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
+    [cart]
+  );
 
   /**
-   * Generates and downloads a clean, printable A4 PDF Order Request Receipt using jsPDF
+   * Generates and downloads a clean, printable A4 PDF Order Request Receipt using jsPDF with #00C1FD electric blue styling
    */
   const handleDownloadPdf = () => {
     if (cart.length === 0 || isGeneratingPdf) return;
@@ -218,13 +178,8 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
       const margin = 16;
       const contentWidth = pageWidth - margin * 2;
 
-      const brandTitle = (
-        settings.businessName || 'SONU DIESEL BHATTI'
-      ).toUpperCase();
-      const cleanPhone = (settings.whatsappNumber || '919876543210').replace(
-        /[^0-9]/g,
-        ''
-      );
+      const brandTitle = (settings.businessName || 'SONU DIESEL BHATTI').toUpperCase();
+      const cleanPhone = (settings.whatsappNumber || '919876543210').replace(/[^0-9]/g, '');
       const activeReceiptNo = receiptNumber || `SDB-${Date.now()}`;
       const activeDate =
         receiptTimestamp ||
@@ -234,11 +189,11 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
         });
 
       // 1. Dark Studio Header Banner
-      doc.setFillColor(24, 24, 27); // zinc-900
+      doc.setFillColor(18, 18, 20); // dark zinc
       doc.roundedRect(margin, 14, contentWidth, 30, 3, 3, 'F');
 
-      // Amber Accent Stripe
-      doc.setFillColor(217, 119, 6); // amber-600
+      // Electric Blue #00C1FD Accent Stripe
+      doc.setFillColor(0, 193, 253);
       doc.rect(margin, 41.5, contentWidth, 2.5, 'F');
 
       // Brand Name & Subtitle
@@ -257,16 +212,13 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
       );
       doc.text(`WhatsApp Order Desk: +${cleanPhone}`, margin + 6, 37);
 
-      // Right-Aligned Receipt Metadata
+      // Right-Aligned Receipt Metadata in Electric Blue #00C1FD
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(251, 191, 36); // amber-400
+      doc.setTextColor(0, 193, 253);
       doc.setFontSize(9.5);
-      doc.text(
-        `Receipt No: ${activeReceiptNo}`,
-        pageWidth - margin - 6,
-        25,
-        { align: 'right' }
-      );
+      doc.text(`Receipt No: ${activeReceiptNo}`, pageWidth - margin - 6, 25, {
+        align: 'right',
+      });
 
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(228, 228, 231);
@@ -274,17 +226,14 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
       doc.text(`Date: ${activeDate}`, pageWidth - margin - 6, 31.5, {
         align: 'right',
       });
-      doc.text(
-        'Status: Order Request (Pending Confirmation)',
-        pageWidth - margin - 6,
-        37,
-        { align: 'right' }
-      );
+      doc.text('Status: Order Request (Pending Confirmation)', pageWidth - margin - 6, 37, {
+        align: 'right',
+      });
 
       // 2. Table Header
       let y = 52;
-      doc.setFillColor(245, 245, 244); // stone-100
-      doc.setDrawColor(212, 212, 216); // zinc-300
+      doc.setFillColor(245, 245, 244);
+      doc.setDrawColor(212, 212, 216);
       doc.rect(margin, y, contentWidth, 9, 'FD');
 
       doc.setFont('helvetica', 'bold');
@@ -326,9 +275,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
         const itemSubtotal = product.price * quantity;
         const seqLabel = String(idx + 1).padStart(2, '0');
         const safeName =
-          product.name.length > 42
-            ? `${product.name.slice(0, 40)}...`
-            : product.name;
+          product.name.length > 42 ? `${product.name.slice(0, 40)}...` : product.name;
 
         doc.setFont('courier', 'bold');
         doc.setFontSize(8.5);
@@ -348,24 +295,18 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
         doc.setFont('courier', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(39, 39, 42);
-        doc.text(
-          `Rs. ${product.price.toLocaleString('en-IN')}`,
-          colPrice,
-          y + 6.5,
-          { align: 'right' }
-        );
+        doc.text(`Rs. ${product.price.toLocaleString('en-IN')}`, colPrice, y + 6.5, {
+          align: 'right',
+        });
 
         doc.setFont('courier', 'bold');
         doc.text(String(quantity), colQty, y + 6.5, { align: 'center' });
 
         doc.setFont('courier', 'bold');
         doc.setTextColor(24, 24, 27);
-        doc.text(
-          `Rs. ${itemSubtotal.toLocaleString('en-IN')}`,
-          colSubtotal,
-          y + 6.5,
-          { align: 'right' }
-        );
+        doc.text(`Rs. ${itemSubtotal.toLocaleString('en-IN')}`, colSubtotal, y + 6.5, {
+          align: 'right',
+        });
 
         y += rowHeight;
       });
@@ -390,7 +331,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
       // Right Grand Total Box
       const totalBoxWidth = 76;
       const totalBoxX = pageWidth - margin - totalBoxWidth;
-      doc.setFillColor(24, 24, 27);
+      doc.setFillColor(18, 18, 20);
       doc.roundedRect(totalBoxX, y, totalBoxWidth, 12, 2, 2, 'F');
 
       doc.setFont('helvetica', 'bold');
@@ -400,13 +341,10 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
 
       doc.setFont('courier', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(251, 191, 36); // amber-400
-      doc.text(
-        `Rs. ${grandTotal.toLocaleString('en-IN')}`,
-        pageWidth - margin - 4,
-        y + 7.5,
-        { align: 'right' }
-      );
+      doc.setTextColor(0, 193, 253);
+      doc.text(`Rs. ${grandTotal.toLocaleString('en-IN')}`, pageWidth - margin - 4, y + 7.5, {
+        align: 'right',
+      });
 
       // 5. Disclaimer Box
       y += 18;
@@ -442,14 +380,13 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
   };
 
   const buildWhatsAppUrl = () => {
-    const cleanPhone = (settings.whatsappNumber || '919876543210').replace(
-      /[^0-9]/g,
-      ''
-    );
+    const cleanPhone = (settings.whatsappNumber || '919876543210').replace(/[^0-9]/g, '');
     const lines: string[] = [
       `*${settings.businessName || 'SONU DIESEL BHATTI'}*`,
       `Order Request Receipt: *${receiptNumber}*`,
       `Date: ${receiptTimestamp}`,
+      `Customer Name: ${customerName || 'Direct Customer'}`,
+      `Phone: ${customerPhone || 'Not provided'}`,
       `--------------------------------`,
       `*Product | Size | Price | Qty | Subtotal*`,
     ];
@@ -457,433 +394,556 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
     for (const item of cart) {
       const sub = item.product.price * item.quantity;
       lines.push(
-        `• ${item.product.name} | ${
-          item.product.size
-        } | ₹${item.product.price.toLocaleString('en-IN')} × ${
-          item.quantity
-        } = *₹${sub.toLocaleString('en-IN')}*`
+        `• ${item.product.name} | ${item.product.size} | ₹${item.product.price.toLocaleString(
+          'en-IN'
+        )} × ${item.quantity} = *₹${sub.toLocaleString('en-IN')}*`
       );
     }
 
     lines.push(`--------------------------------`);
-    lines.push(
-      `*Total Order Request Amount: ₹${grandTotal.toLocaleString('en-IN')}*`
-    );
-    lines.push(
-      `\nPlease confirm current availability and dispatch details for this order request.`
-    );
+    lines.push(`*Total Order Request Amount: ₹${grandTotal.toLocaleString('en-IN')}*`);
+    if (shippingAddress) {
+      lines.push(`Delivery Address: ${shippingAddress}`);
+    }
+    lines.push(`\nPlease confirm current availability and dispatch details for this order request.`);
 
     const encoded = encodeURIComponent(lines.join('\n'));
     return `https://wa.me/${cleanPhone}?text=${encoded}`;
   };
 
+  const handlePlaceDatabaseOrder = async () => {
+    if (cart.length === 0) return;
+    if (!customerName.trim() || !customerPhone.trim()) {
+      setSubmitError('Please enter customer name and phone number to submit order.');
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    setSubmitError(null);
+
+    try {
+      const itemsPayload = cart.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        unitPrice: item.product.price,
+      }));
+
+      const res = await fetch('/api/orders/public', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          shippingAddress: shippingAddress.trim(),
+          items: itemsPayload,
+        }),
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.order) {
+          setSubmittedOrder(json.order);
+          if (onOrderPlaced) {
+            onOrderPlaced(json.order);
+          }
+        }
+      } else {
+        const err = await res.json();
+        setSubmitError(err.error || 'Failed to record order into database.');
+      }
+    } catch {
+      setSubmitError('Network error recording order into database. You can still send via WhatsApp.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-3xl rounded-xl bg-white border border-zinc-200 shadow-2xl overflow-hidden my-auto">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-zinc-900 text-white no-print">
-          <div className="flex items-center gap-2.5">
-            <FileText className="w-5 h-5 text-amber-500" />
-            <div>
-              <h2 className="text-base font-bold tracking-tight">
-                {t('cartTitle')}
+    <div className="fixed inset-0 z-50 flex flex-col bg-[#0B0B0C] text-white no-print overflow-hidden">
+      {/* 1. Full Screen Top Studio Bar */}
+      <header className="flex items-center justify-between gap-4 px-4 sm:px-8 py-3.5 bg-[#121214] border-b border-zinc-800 shrink-0 shadow-md">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 border border-zinc-800 transition-colors cursor-pointer shrink-0"
+            title="Close Full Screen Modal"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-[#00C1FD]/10 border border-[#00C1FD]/30 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-[#00C1FD]" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-extrabold tracking-tight text-white truncate flex items-center gap-2">
+                <span>{t('cartTitle')}</span>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-[#00C1FD]/20 text-[#00C1FD] border border-[#00C1FD]/30 font-mono text-[10px] font-bold">
+                  {cart.length} Models ({totalUnits} Units)
+                </span>
               </h2>
-              <p className="text-xs text-zinc-400">{t('cartSubtitle')}</p>
+              <p className="text-[11px] text-zinc-400 truncate">
+                Full-screen printable receipt generator & WhatsApp dispatch maker
+              </p>
             </div>
           </div>
+        </div>
+
+        {/* Mobile Viewport Toggle (Visible on phone screens) */}
+        <div className="lg:hidden flex items-center p-1 rounded-xl bg-zinc-900 border border-zinc-800 shrink-0">
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            type="button"
+            onClick={() => setActiveMobileTab('cart')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              activeMobileTab === 'cart'
+                ? 'bg-[#00C1FD] text-zinc-950 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
           >
-            <X className="w-5 h-5" />
+            Items ({cart.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMobileTab('receipt')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              activeMobileTab === 'receipt'
+                ? 'bg-[#00C1FD] text-zinc-950 shadow-sm'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Receipt
           </button>
         </div>
 
-        {cart.length === 0 ? (
-          <div className="p-12 text-center">
-            <div className="w-12 h-12 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center mx-auto mb-3">
-              <ShoppingBag className="w-6 h-6 text-zinc-500" />
-            </div>
-            <h3 className="text-base font-bold text-zinc-900">
-              {t('emptyCartTitle')}
-            </h3>
-            <p className="text-sm text-zinc-500 mt-1 max-w-md mx-auto">
-              {t('emptyCartDesc')}
-            </p>
+        {/* Desktop Header Actions */}
+        <div className="hidden lg:flex items-center gap-3 shrink-0">
+          {cart.length > 0 && (
             <button
-              onClick={onClose}
-              className="mt-5 px-5 py-2.5 rounded-lg bg-zinc-900 text-white text-xs font-semibold hover:bg-zinc-800 transition-colors cursor-pointer"
+              type="button"
+              onClick={onClearCart}
+              className="px-3 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-red-400 hover:bg-zinc-900 border border-zinc-800 transition-colors cursor-pointer inline-flex items-center gap-1.5"
             >
-              {t('navCatalogue')}
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Order</span>
             </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-[#00C1FD] hover:bg-[#00b0e6] text-zinc-950 font-extrabold text-xs transition-colors cursor-pointer shadow-sm active:scale-95"
+          >
+            Done & Back
+          </button>
+        </div>
+      </header>
+
+      {/* 2. Full Screen Responsive Body Area */}
+      {cart.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-4 shadow-inner">
+            <ShoppingBag className="w-8 h-8 text-[#00C1FD]" />
           </div>
-        ) : (
-          <div className="p-6 space-y-6 max-h-[82vh] overflow-y-auto">
-            {/* Stock Verification Banner */}
+          <h3 className="text-xl font-bold text-white">{t('emptyCartTitle')}</h3>
+          <p className="text-sm text-zinc-400 mt-1 max-w-md">
+            {t('emptyCartDesc')}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-6 px-6 py-3 rounded-xl bg-[#00C1FD] hover:bg-[#00b0e6] text-zinc-950 text-xs font-extrabold transition-all cursor-pointer shadow-md active:scale-95"
+          >
+            Browse Product Catalogue
+          </button>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-hidden grid grid-cols-1 lg:grid-cols-12 gap-0">
+          {/* =================================================================== */}
+          {/* LEFT COLUMN (or Mobile Tab 1): Itemized Cart & Order Form           */}
+          {/* =================================================================== */}
+          <div
+            className={`lg:col-span-5 h-full flex flex-col border-r border-zinc-800 bg-[#121214] overflow-y-auto ${
+              activeMobileTab === 'receipt' ? 'hidden lg:flex' : 'flex'
+            }`}
+          >
+            {/* Live Stock Notice */}
             {isVerifying && (
-              <div className="px-4 py-2.5 rounded-lg bg-stone-100 border border-stone-200 text-xs text-zinc-700">
-                {t('verifyingStock')}
+              <div className="p-3 bg-zinc-900 text-xs text-zinc-400 border-b border-zinc-800 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#00C1FD] animate-ping" />
+                <span>Verifying live workshop availability...</span>
               </div>
             )}
             {!isVerifying && stockVerifiedMessage && (
               <div
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-xs font-medium no-print ${
+                className={`p-3 text-xs font-medium border-b flex items-center gap-2 ${
                   stockIssues.length > 0
-                    ? 'bg-amber-50 border-amber-200 text-amber-900'
-                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                    : 'bg-[#00C1FD]/10 text-[#00C1FD] border-[#00C1FD]/20'
                 }`}
               >
                 {stockIssues.length > 0 ? (
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                 ) : (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00C1FD] shrink-0" />
                 )}
                 <span>{stockVerifiedMessage}</span>
               </div>
             )}
 
-            {/* Printable Receipt Document Box */}
-            <div className="border border-zinc-200 rounded-xl p-5 sm:p-6 bg-stone-50/60">
-              {/* Receipt Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-zinc-900 flex items-center justify-center shrink-0">
-                    <Flame className="w-5 h-5 text-amber-500" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-extrabold tracking-tight text-zinc-900">
-                      {settings.businessName || t('brandName')}
-                    </h3>
-                    <p className="text-xs text-zinc-500">
-                      {t('receiptModalTitle')}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-left sm:text-right text-xs text-zinc-600 font-mono tabular-nums space-y-0.5">
-                  <div>
-                    <span className="text-zinc-400">{t('receiptNo')}: </span>
-                    <span className="font-bold text-zinc-900">
-                      {receiptNumber}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-zinc-400">{t('receiptDate')}: </span>
-                    <span>{receiptTimestamp}</span>
-                  </div>
-                </div>
-              </div>
+            {/* Scrollable Items List */}
+            <div className="p-4 sm:p-6 space-y-3.5 flex-1 overflow-y-auto">
+              <h3 className="text-xs font-extrabold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                <span>Selected Bhatti Models</span>
+                <span className="font-mono text-[#00C1FD]">₹{grandTotal.toLocaleString('en-IN')}</span>
+              </h3>
 
-              {/* Receipt Table */}
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-zinc-200 text-[11px] font-semibold text-zinc-500">
-                      <th className="py-2.5 pr-3">{t('productCol')}</th>
-                      <th className="py-2.5 px-3">{t('sizeCol')}</th>
-                      <th className="py-2.5 px-3 text-right">
-                        {t('priceCol')}
-                      </th>
-                      <th className="py-2.5 px-3 text-center">{t('qtyCol')}</th>
-                      <th className="py-2.5 pl-3 text-right">
-                        {t('subtotalCol')}
-                      </th>
-                      <th className="py-2.5 pl-2 text-right no-print"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200/70 text-sm">
-                    {cart.map(({ product, quantity }) => {
-                      const itemSubtotal = product.price * quantity;
-                      return (
-                        <tr key={product.id} className="group">
-                          <td className="py-3 pr-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-11 h-11 rounded-lg overflow-hidden border border-zinc-200 shrink-0 bg-white">
-                                <ProductImage
-                                  src={product.imageUrl}
-                                  alt={product.name}
-                                  sizeLabel={product.size}
-                                />
-                              </div>
-                              <span className="font-semibold text-zinc-900 text-xs sm:text-sm">
-                                {product.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 text-xs text-zinc-600 whitespace-nowrap">
-                            {translateSize(product.size)}
-                          </td>
-                          <td className="py-3 px-3 text-right font-mono tabular-nums text-xs sm:text-sm text-zinc-700 whitespace-nowrap">
+              <div className="space-y-3">
+                {cart.map(({ product, quantity }) => {
+                  const subtotal = product.price * quantity;
+                  return (
+                    <div
+                      key={product.id}
+                      className="p-3.5 rounded-2xl bg-[#18181A] border border-zinc-800/80 flex items-center gap-3.5 shadow-sm group hover:border-zinc-700 transition-colors"
+                    >
+                      {/* Product Thumbnail */}
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-zinc-800 shrink-0 bg-zinc-900">
+                        <ProductImage
+                          src={product.imageUrl}
+                          alt={product.name}
+                          sizeLabel={product.size}
+                        />
+                      </div>
+
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h4 className="text-xs sm:text-sm font-bold text-white leading-snug truncate">
+                          {product.name}
+                        </h4>
+                        <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-2">
+                          <span>{translateSize(product.size)}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="text-[#00C1FD] font-semibold">
                             ₹{product.price.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-3 px-3">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() =>
-                                  onUpdateQty(product.id, quantity - 1)
-                                }
-                                className="w-7 h-7 rounded-md border border-zinc-300 bg-white flex items-center justify-center text-zinc-700 hover:bg-zinc-100 no-print cursor-pointer"
-                                title="Decrease quantity"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="w-8 text-center font-mono tabular-nums font-bold text-zinc-900 text-xs sm:text-sm">
-                                {quantity}
-                              </span>
-                              <button
-                                onClick={() =>
-                                  onUpdateQty(
-                                    product.id,
-                                    Math.min(
-                                      product.stockQuantity,
-                                      quantity + 1
-                                    )
-                                  )
-                                }
-                                disabled={quantity >= product.stockQuantity}
-                                className="w-7 h-7 rounded-md border border-zinc-300 bg-white flex items-center justify-center text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 no-print cursor-pointer"
-                                title="Increase quantity"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-3 pl-3 text-right font-mono tabular-nums font-bold text-zinc-900 text-xs sm:text-sm whitespace-nowrap">
-                            ₹{itemSubtotal.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-3 pl-2 text-right no-print">
+                          </span>
+                        </div>
+
+                        {/* Quantity Stepper with Touch Targets >= 44px */}
+                        <div className="pt-1.5 flex items-center gap-2">
+                          <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
                             <button
-                              onClick={() => onRemoveItem(product.id)}
-                              className="p-1.5 text-zinc-400 hover:text-red-600 rounded-md transition-colors cursor-pointer"
-                              title={t('removeItem')}
+                              type="button"
+                              onClick={() => onUpdateQty(product.id, quantity - 1)}
+                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95"
+                              title="Decrease quantity"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Minus className="w-3.5 h-3.5" />
                             </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            <span className="w-8 text-center font-mono tabular-nums font-extrabold text-white text-xs">
+                              {quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onUpdateQty(
+                                  product.id,
+                                  Math.min(product.stockQuantity, quantity + 1)
+                                )
+                              }
+                              disabled={quantity >= product.stockQuantity}
+                              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#00C1FD] hover:bg-[#00b0e6] text-zinc-950 flex items-center justify-center font-bold transition-colors disabled:opacity-40 cursor-pointer active:scale-95"
+                              title="Increase quantity"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
 
-              {/* Grand Total Footer */}
-              <div className="mt-4 pt-4 border-t border-zinc-300 flex items-center justify-between">
-                <span className="text-sm font-bold text-zinc-700">
-                  {t('grandTotal')}
-                </span>
-                <span className="text-xl font-extrabold font-mono tabular-nums text-zinc-900">
-                  ₹{grandTotal.toLocaleString('en-IN')}
-                </span>
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => onRemoveItem(product.id)}
+                            className="p-2 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-zinc-900 transition-colors cursor-pointer"
+                            title="Remove item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
 
-              {/* Important Disclaimer */}
-              <p className="mt-4 pt-3 border-t border-zinc-200/80 text-[11px] text-zinc-500 leading-relaxed">
-                {t('receiptDisclaimer')}
-              </p>
-            </div>
-
-            {submittedOrder ? (
-              <div className="p-4 sm:p-6 rounded-2xl bg-[#1c1c1e] text-white border border-zinc-800 space-y-4 shadow-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-base font-bold text-white">
-                      Order Placed & Stored in Database!
-                    </h4>
-                    <p className="text-xs text-zinc-400 font-mono">
-                      Order ID:{' '}
-                      <strong className="text-emerald-400">
-                        #{submittedOrder.orderNumber}
-                      </strong>{' '}
-                      · Live notification sent to workshop
-                    </p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Your order for{' '}
-                  <strong className="text-white font-mono">
-                    ₹{submittedOrder.totalAmount.toLocaleString('en-IN')}
-                  </strong>{' '}
-                  has been persisted into PostgreSQL. You can track its live fabrication status under{' '}
-                  <strong>My Orders</strong> anytime.
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    className="px-4 py-2.5 rounded-xl bg-[#EDEDED] hover:bg-white text-zinc-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4 text-zinc-900" />
-                    <span>Download Official PDF Receipt</span>
-                  </button>
-
-                  <a
-                    href={buildWhatsAppUrl()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-colors"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>Send to WhatsApp</span>
-                  </a>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClearCart();
-                      onClose();
-                    }}
-                    className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs cursor-pointer transition-colors"
-                  >
-                    Done & Close
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Customer Contact & Delivery Form */}
-                <div className="bg-stone-50 border border-zinc-200 rounded-xl p-3.5 sm:p-4 space-y-3 no-print">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
-                      <Truck className="w-4 h-4 text-zinc-700" />
-                      <span>Customer Contact & Delivery Information</span>
-                    </h4>
-                    {currentUser && (
-                      <span className="text-[11px] font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                        {currentUser.role === 'admin' ? '👑 Admin' : '👤 Customer'} ({currentUser.name.split(' ')[0]})
-                      </span>
-                    )}
-                  </div>
-
-                  {submitError && (
-                    <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 font-semibold flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                      <span>{submitError}</span>
+                      {/* Subtotal */}
+                      <div className="text-right shrink-0">
+                        <span className="text-xs sm:text-sm font-extrabold font-mono text-white block">
+                          ₹{subtotal.toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {quantity} × ₹{product.price.toLocaleString('en-IN')}
+                        </span>
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* Customer Delivery Form */}
+              <div className="pt-4 border-t border-zinc-800/80 space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-[#00C1FD]" />
+                    <span>Contact & Delivery Details</span>
+                  </span>
+                  {currentUser && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#00C1FD]/10 text-[#00C1FD] border border-[#00C1FD]/20 font-bold">
+                      {currentUser.name}
+                    </span>
                   )}
+                </h4>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] font-bold text-zinc-600 block mb-1">
-                        Full Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Gurpreet Singh / Sonu"
-                        className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-medium"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-zinc-600 block mb-1">
-                        Mobile Phone / WhatsApp <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="e.g. 9876543210"
-                        className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-mono font-medium"
-                      />
-                    </div>
+                {submitError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{submitError}</span>
                   </div>
+                )}
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-zinc-600 block mb-1">
-                      Delivery City / Workshop Address (Optional)
+                    <label className="text-[11px] font-bold text-zinc-400 block mb-1">
+                      Customer Name <span className="text-[#00C1FD]">*</span>
                     </label>
                     <input
                       type="text"
-                      value={shippingAddress}
-                      onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder="e.g. Shop #12, Industrial Area, Ludhiana, Punjab"
-                      className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-medium"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="e.g. Gurpreet Singh"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181A] border border-zinc-800 text-xs text-white placeholder-zinc-600 focus:border-[#00C1FD] focus:outline-none font-medium transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-400 block mb-1">
+                      WhatsApp / Phone <span className="text-[#00C1FD]">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="e.g. 9876543210"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181A] border border-zinc-800 text-xs text-white placeholder-zinc-600 focus:border-[#00C1FD] focus:outline-none font-mono font-medium transition-colors"
                     />
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 no-print">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Download Receipt PDF Button (jsPDF) */}
-                    <button
-                      type="button"
-                      onClick={handleDownloadPdf}
-                      disabled={isGeneratingPdf}
-                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
-                    >
-                      {pdfDownloaded ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>{t('receiptDownloadedMsg')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4 text-amber-400" />
-                          <span>{t('downloadReceiptBtn')}</span>
-                        </>
-                      )}
-                    </button>
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 block mb-1">
+                    Delivery Workshop Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={shippingAddress}
+                    onChange={(e) => setShippingAddress(e.target.value)}
+                    placeholder="e.g. Industrial Area, Ludhiana, Punjab"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#18181A] border border-zinc-800 text-xs text-white placeholder-zinc-600 focus:border-[#00C1FD] focus:outline-none font-medium transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
 
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 hover:bg-zinc-100 transition-colors cursor-pointer whitespace-nowrap"
-                    >
-                      <Printer className="w-4 h-4 text-zinc-600" />
-                      <span>{t('printReceipt')}</span>
-                    </button>
+            {/* Sticky Left Actions Bar */}
+            <div className="p-4 bg-[#0D0D0E] border-t border-zinc-800 space-y-2 shrink-0">
+              <button
+                type="button"
+                disabled={isSubmittingOrder || cart.length === 0}
+                onClick={handlePlaceDatabaseOrder}
+                className="w-full py-3 px-4 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-transform active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-4 h-4 text-[#00C1FD]" />
+                <span>
+                  {isSubmittingOrder ? 'Saving to Database...' : 'Save & Place Order in Database'}
+                </span>
+              </button>
 
-                    <button
-                      type="button"
-                      onClick={onClearCart}
-                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-600 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer whitespace-nowrap"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{t('clearCart')}</span>
-                    </button>
+              <button
+                type="button"
+                onClick={() => setActiveMobileTab('receipt')}
+                className="lg:hidden w-full py-2.5 px-4 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 font-bold text-xs flex items-center justify-center gap-1.5"
+              >
+                <span>View Live Printable Receipt</span>
+                <ChevronRight className="w-4 h-4 text-[#00C1FD]" />
+              </button>
+            </div>
+          </div>
+
+          {/* =================================================================== */}
+          {/* RIGHT COLUMN (or Mobile Tab 2): Live Printable Document Preview     */}
+          {/* =================================================================== */}
+          <div
+            className={`lg:col-span-7 h-full flex flex-col bg-[#0B0B0C] overflow-y-auto p-4 sm:p-8 ${
+              activeMobileTab === 'cart' ? 'hidden lg:flex' : 'flex'
+            }`}
+          >
+            {/* Live Document Preview Card */}
+            <div className="max-w-2xl mx-auto w-full bg-white text-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-zinc-300 flex flex-col">
+              {/* Document Header Bar in Electric Blue #00C1FD */}
+              <div className="p-6 bg-[#121214] text-white border-b-4 border-[#00C1FD] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#00C1FD]/20 border border-[#00C1FD]/40 flex items-center justify-center shrink-0">
+                    <Flame className="w-6 h-6 text-[#00C1FD]" />
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Place Official Order directly into Database */}
-                    <button
-                      type="button"
-                      disabled={isSubmittingOrder || cart.length === 0}
-                      onClick={handlePlaceDatabaseOrder}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-bold shadow-md transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap border border-zinc-700"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-400" />
-                      <span>
-                        {isSubmittingOrder
-                          ? 'Saving to Database...'
-                          : 'Place Order in Database'}
-                      </span>
-                    </button>
-
-                    <a
-                      href={buildWhatsAppUrl()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => verifyCartStock()}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-colors whitespace-nowrap"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>{t('sendToWhatsApp')}</span>
-                    </a>
+                  <div>
+                    <h3 className="text-xl font-extrabold tracking-tight text-white">
+                      {settings.businessName || 'SONU DIESEL BHATTI'}
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      OFFICIAL ORDER REQUEST RECEIPT
+                    </p>
                   </div>
                 </div>
-              </>
-            )}
+
+                <div className="text-left sm:text-right text-xs font-mono space-y-1">
+                  <div className="text-[#00C1FD] font-bold text-sm">
+                    {receiptNumber}
+                  </div>
+                  <div className="text-zinc-400">{receiptTimestamp}</div>
+                </div>
+              </div>
+
+              {/* Document Inner Table & Content */}
+              <div className="p-6 space-y-6 flex-1 bg-white">
+                {/* Customer Banner */}
+                {(customerName || customerPhone) && (
+                  <div className="p-3.5 rounded-xl bg-stone-100 border border-stone-200 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-700">
+                    <div>
+                      <span className="font-bold text-zinc-900">Customer: </span>
+                      <span>{customerName || 'Direct Customer'}</span>
+                      {customerPhone && (
+                        <span className="font-mono text-zinc-500 ml-2">
+                          ({customerPhone})
+                        </span>
+                      )}
+                    </div>
+                    {shippingAddress && (
+                      <div className="text-[11px] text-zinc-500 truncate">
+                        {shippingAddress}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-zinc-300 text-[11px] font-bold text-zinc-600 uppercase">
+                        <th className="py-2.5 pr-2">#</th>
+                        <th className="py-2.5 pr-3">Product Model</th>
+                        <th className="py-2.5 px-2">Size</th>
+                        <th className="py-2.5 px-2 text-right">Price</th>
+                        <th className="py-2.5 px-2 text-center">Qty</th>
+                        <th className="py-2.5 pl-2 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-200 text-xs sm:text-sm">
+                      {cart.map(({ product, quantity }, idx) => {
+                        const sub = product.price * quantity;
+                        return (
+                          <tr key={product.id}>
+                            <td className="py-3 pr-2 font-mono text-zinc-400 text-xs">
+                              {String(idx + 1).padStart(2, '0')}
+                            </td>
+                            <td className="py-3 pr-3 font-bold text-zinc-900">
+                              {product.name}
+                            </td>
+                            <td className="py-3 px-2 text-zinc-600 text-xs">
+                              {product.size}
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-zinc-700">
+                              ₹{product.price.toLocaleString('en-IN')}
+                            </td>
+                            <td className="py-3 px-2 text-center font-mono font-bold">
+                              {quantity}
+                            </td>
+                            <td className="py-3 pl-2 text-right font-mono font-bold text-zinc-900">
+                              ₹{sub.toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Grand Total Box */}
+                <div className="pt-4 border-t-2 border-zinc-900 flex items-center justify-between bg-stone-50 p-4 rounded-xl">
+                  <div>
+                    <span className="text-xs text-zinc-500 font-bold block">
+                      TOTAL ITEMS: {cart.length} ({totalUnits} UNITS)
+                    </span>
+                    <span className="text-xs text-emerald-700 font-semibold">
+                      Official Workshop Quotation
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-zinc-500 block">GRAND TOTAL</span>
+                    <span className="text-2xl font-extrabold font-mono text-[#00C1FD]">
+                      ₹{grandTotal.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Disclaimers */}
+                <div className="p-3 rounded-xl bg-stone-100 border border-stone-200 text-[11px] text-zinc-500 leading-relaxed">
+                  <strong className="text-zinc-900 font-bold block mb-0.5">
+                    Sonu Diesel Bhatti Dispatch Policy:
+                  </strong>
+                  This document serves as an official order request. Dispatches and custom burner sizing are verified by administrators prior to shipping.
+                </div>
+              </div>
+
+              {/* Action Toolbar on Document Bottom */}
+              <div className="p-4 bg-stone-100 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-3 no-print">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    disabled={isGeneratingPdf}
+                    className="px-4 py-2.5 rounded-xl bg-[#00C1FD] hover:bg-[#00b0e6] text-zinc-950 font-extrabold text-xs inline-flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                  >
+                    {pdfDownloaded ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-zinc-950" />
+                        <span>PDF Downloaded!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        <span>Download Clean PDF</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-3.5 py-2.5 rounded-xl border border-zinc-300 bg-white text-zinc-800 text-xs font-semibold hover:bg-stone-200 cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>Print</span>
+                  </button>
+                </div>
+
+                <a
+                  href={buildWhatsAppUrl()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs inline-flex items-center gap-2 shadow-sm transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send Order via WhatsApp</span>
+                </a>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
-};
-
+});

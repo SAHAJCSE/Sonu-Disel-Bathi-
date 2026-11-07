@@ -34,7 +34,7 @@ interface ActionFeedbackToastProps {
   onDismiss: () => void;
 }
 
-export const ActionFeedbackToast: React.FC<ActionFeedbackToastProps> = ({
+export const ActionFeedbackToast: React.FC<ActionFeedbackToastProps> = React.memo(({
   toast,
   onDismiss,
 }) => {
@@ -61,11 +61,11 @@ export const ActionFeedbackToast: React.FC<ActionFeedbackToastProps> = ({
       case 'favorite_remove':
         return <Heart className="w-4 h-4 text-zinc-400" />;
       case 'order_placed':
-        return <Package className="w-4 h-4 text-amber-400" />;
+        return <Package className="w-4 h-4 text-[#00C1FD]" />;
       case 'stock_change':
-        return <Boxes className="w-4 h-4 text-sky-400" />;
+        return <Boxes className="w-4 h-4 text-[#00C1FD]" />;
       default:
-        return <Sparkles className="w-4 h-4 text-amber-400" />;
+        return <Sparkles className="w-4 h-4 text-[#00C1FD]" />;
     }
   };
 
@@ -113,14 +113,14 @@ export const ActionFeedbackToast: React.FC<ActionFeedbackToastProps> = ({
           <X className="w-3.5 h-3.5" />
         </button>
 
-        {/* Animated 2.8s timer bar */}
+        {/* Animated 2.8s timer bar in Electric Blue #00C1FD */}
         <motion.div
           initial={{ width: '100%' }}
           animate={{ width: '0%' }}
           transition={{ duration: 2.8, ease: 'linear' }}
-          className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-amber-500 via-emerald-400 to-amber-400"
+          className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#00C1FD] via-emerald-400 to-[#00C1FD]"
         />
       </motion.div>
     </div>
   );
-};
+});

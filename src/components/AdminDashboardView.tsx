@@ -493,7 +493,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               type="button"
               onClick={onSyncNow}
               disabled={!isOnline || isSyncing}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#00C1FD] text-zinc-950 font-extrabold text-xs hover:bg-[#00b0e6] disabled:opacity-50 cursor-pointer shadow-2xs"
             >
               <RefreshCw
                 className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`}
@@ -513,7 +513,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             }}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-amber-400" />
+            <Plus className="w-4 h-4 text-[#00C1FD]" />
             <span>{t('addProductBtn')}</span>
           </button>
 
@@ -555,13 +555,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <span>{t('lowStockMetric')}</span>
             <AlertTriangle
               className={`w-4 h-4 ${
-                lowStockProducts.length > 0 ? 'text-amber-600' : 'text-zinc-400'
+                lowStockProducts.length > 0 ? 'text-[#00C1FD]' : 'text-zinc-400'
               }`}
             />
           </div>
           <div
             className={`text-2xl font-extrabold font-mono tabular-nums ${
-              lowStockProducts.length > 0 ? 'text-amber-700' : 'text-zinc-900'
+              lowStockProducts.length > 0 ? 'text-[#00C1FD]' : 'text-zinc-900'
             }`}
           >
             {lowStockProducts.length}
@@ -581,9 +581,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Low Stock Alert Strip (if any) */}
       {lowStockProducts.length > 0 && (
-        <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-2.5 text-xs text-amber-950">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+        <div className="bg-[#00C1FD]/10 border border-[#00C1FD]/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-2.5 text-xs text-zinc-900">
+            <AlertTriangle className="w-4 h-4 text-[#00C1FD] shrink-0 mt-0.5 sm:mt-0" />
             <div>
               <span className="font-bold">{t('lowStockLabel')}: </span>
               <span>

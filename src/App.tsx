@@ -1253,8 +1253,8 @@ function SonuBhattiAppContent() {
               </>
             ) : (
               <>
-                <Volume2 className="w-4 h-4 text-amber-500 animate-pulse" />
-                <span className="hidden xl:inline text-[11px] text-zinc-800 font-semibold">Sound On</span>
+                <Volume2 className="w-4 h-4 text-[#00C1FD] animate-pulse" />
+                <span className="hidden xl:inline text-zinc-800 font-semibold text-[11px]">Sound On</span>
               </>
             )}
           </motion.button>
@@ -1295,7 +1295,7 @@ function SonuBhattiAppContent() {
             }}
             className="px-3 sm:px-4 py-2 text-xs font-bold text-white bg-zinc-900 rounded-xl hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm border border-zinc-700 active:scale-95"
           >
-            <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
+            <ShoppingBag className="w-3.5 h-3.5 text-[#00C1FD]" />
             <span className="hidden xs:inline">{t('cartButton')}</span>
             <motion.span
               key={totalCartItems}
@@ -1329,7 +1329,7 @@ function SonuBhattiAppContent() {
                   setViewMode('public');
                 }
               }}
-              className="md:hidden font-semibold text-amber-700 hover:underline cursor-pointer"
+              className="md:hidden font-bold text-[#00C1FD] hover:underline cursor-pointer"
             >
               {viewMode === 'public'
                 ? t('navAdminPortal')
@@ -1418,7 +1418,7 @@ function SonuBhattiAppContent() {
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch bg-zinc-900 text-white rounded-2xl overflow-hidden border border-zinc-800">
               <div className="lg:col-span-7 p-6 sm:p-10 lg:p-12 flex flex-col justify-between space-y-6">
                 <div className="space-y-4">
-                  <p className="text-xs font-medium text-amber-400 tracking-wide">
+                  <p className="text-xs font-bold text-[#00C1FD] tracking-wide">
                     {t('heroKicker')}
                   </p>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-[1.12]">
@@ -1438,9 +1438,9 @@ function SonuBhattiAppContent() {
                         .getElementById('catalogue-filters')
                         ?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    className="px-5 py-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2"
+                    className="px-5 py-3 rounded-lg bg-[#00C1FD] hover:bg-[#00b0e6] text-zinc-950 text-xs sm:text-sm font-extrabold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2 shadow-md active:scale-95"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 text-zinc-950" />
                     <span>
                       {t('tabShowcaseCards')} ({activePublicProducts.length})
                     </span>
@@ -1455,7 +1455,7 @@ function SonuBhattiAppContent() {
                     }}
                     className="px-5 py-3 rounded-lg border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800 text-zinc-100 text-xs sm:text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center gap-2"
                   >
-                    <LayoutGrid className="w-4 h-4 text-amber-400" />
+                    <LayoutGrid className="w-4 h-4 text-[#00C1FD]" />
                     <span>{t('tabCatalogueGrid')}</span>
                   </button>
                   <button
@@ -1504,7 +1504,7 @@ function SonuBhattiAppContent() {
                       : 'text-zinc-600 hover:text-zinc-900'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <Sparkles className="w-4 h-4 text-[#00C1FD]" />
                   <span>{t('tabShowcaseCards')}</span>
                 </button>
               </div>
@@ -1538,7 +1538,7 @@ function SonuBhattiAppContent() {
                   <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                     {isSearchDebouncing && (
                       <RefreshCw
-                        className="w-3.5 h-3.5 text-amber-600 animate-spin"
+                        className="w-3.5 h-3.5 text-[#00C1FD] animate-spin"
                         aria-label="Updating search results"
                       />
                     )}
@@ -1646,11 +1646,11 @@ function SonuBhattiAppContent() {
                     onClick={resetAllCatalogueFilters}
                     className={`px-3.5 py-2.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border ${
                       hasActiveFilters
-                        ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 shadow-2xs'
+                        ? 'bg-[#00C1FD]/10 hover:bg-[#00C1FD]/20 text-zinc-900 border-[#00C1FD]/30 shadow-2xs'
                         : 'bg-stone-100 text-zinc-400 border-zinc-200 opacity-60 cursor-not-allowed'
                     }`}
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
+                    <RotateCcw className="w-3.5 h-3.5 text-[#00C1FD]" />
                     <span>{t('clearAllBtn')}</span>
                   </button>
                 </div>
@@ -1682,7 +1682,7 @@ function SonuBhattiAppContent() {
                         <span>{sz.label}</span>
                         <span
                           className={`text-[11px] font-mono tabular-nums ${
-                            isSelected ? 'text-amber-400' : 'text-zinc-400'
+                            isSelected ? 'text-[#00C1FD]' : 'text-zinc-400'
                           }`}
                         >
                           ({count})
@@ -1724,7 +1724,7 @@ function SonuBhattiAppContent() {
 
                   {/* No. of Products on Screen Selector */}
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-stone-100 border border-zinc-200">
-                    <Grid2x2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <Grid2x2 className="w-3.5 h-3.5 text-[#00C1FD] shrink-0" />
                     <span className="text-[11px] font-semibold text-zinc-600 whitespace-nowrap">
                       Show:
                     </span>
@@ -1764,9 +1764,9 @@ function SonuBhattiAppContent() {
                     <button
                       type="button"
                       onClick={resetAllCatalogueFilters}
-                      className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-800 cursor-pointer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[#00C1FD] hover:underline cursor-pointer"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <RotateCcw className="w-3.5 h-3.5 text-[#00C1FD]" />
                       <span>{t('clearAllBtn')}</span>
                     </button>
                   )}
@@ -2012,7 +2012,7 @@ function SonuBhattiAppContent() {
                           onClick={() => setCurrentPage(pageNum)}
                           className={`w-8 h-8 rounded-lg font-mono tabular-nums text-xs font-bold transition-colors cursor-pointer ${
                             currentPage === pageNum
-                              ? 'bg-zinc-900 text-amber-400'
+                              ? 'bg-zinc-900 text-[#00C1FD]'
                               : 'bg-stone-100 hover:bg-stone-200 text-zinc-700'
                           }`}
                         >
@@ -2109,7 +2109,7 @@ function SonuBhattiAppContent() {
             className="fixed top-20 right-4 z-50 max-w-sm p-4 rounded-2xl bg-[#1c1c1e] text-white border border-zinc-700 shadow-2xl flex items-start gap-3 cursor-pointer ring-1 ring-white/10"
           >
             <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-4 h-4 text-[#00C1FD]" />
             </div>
             <div className="min-w-0 flex-1">
               <h5 className="text-xs font-bold text-white leading-tight">
@@ -2134,16 +2134,16 @@ function SonuBhattiAppContent() {
       {/* OFFLINE & AUTOMATIC SYNC INDICATOR                                  */}
       {/* =================================================================== */}
       {!isOnline && (
-        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-amber-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg max-w-md no-print">
-          <WifiOff className="w-4 h-4 shrink-0" />
+        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg max-w-md no-print">
+          <WifiOff className="w-4 h-4 text-[#00C1FD] shrink-0" />
           <span>{t('offlineBanner')}</span>
         </div>
       )}
 
       {isOnline && syncToast && (
-        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white shadow-lg no-print">
+        <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg no-print">
           {isSyncing ? (
-            <RefreshCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
+            <RefreshCw className="w-4 h-4 text-[#00C1FD] animate-spin shrink-0" />
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           )}

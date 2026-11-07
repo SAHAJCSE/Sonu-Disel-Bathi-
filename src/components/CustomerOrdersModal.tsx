@@ -141,7 +141,7 @@ export const CustomerOrdersModal: React.FC<CustomerOrdersModalProps> = ({
         );
       case 'dispatched':
         return (
-          <span className="px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold inline-flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full bg-[#00C1FD]/10 text-[#00C1FD] border border-[#00C1FD]/20 text-xs font-bold inline-flex items-center gap-1">
             <Truck className="w-3.5 h-3.5" />
             <span>Dispatched</span>
           </span>
@@ -163,7 +163,7 @@ export const CustomerOrdersModal: React.FC<CustomerOrdersModalProps> = ({
       default:
         return (
           <span className="px-2.5 py-1 rounded-full bg-zinc-700/40 text-zinc-300 border border-zinc-600/30 text-xs font-bold inline-flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <Clock className="w-3.5 h-3.5 text-[#00C1FD]" />
             <span>Order Placed (Pending)</span>
           </span>
         );

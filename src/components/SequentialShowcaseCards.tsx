@@ -218,7 +218,7 @@ export const SequentialShowcaseCards: React.FC<
 
           {/* Sequential Order Pill (#01, #02, #03...) */}
           <div className="absolute top-2 left-2 sm:top-3 sm:left-3 px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-[#222224]/85 backdrop-blur-xs text-white font-mono tabular-nums text-[9px] sm:text-[11px] font-extrabold tracking-wider shadow-sm flex items-center gap-0.5">
-            <span className="text-amber-400">#</span>
+            <span className="text-[#00C1FD]">#</span>
             <span>{seqNumber}</span>
           </div>
 
@@ -252,7 +252,7 @@ export const SequentialShowcaseCards: React.FC<
             }}
             className="hidden sm:flex absolute bottom-3 left-3 px-2.5 py-1 rounded-full bg-[#222224]/80 backdrop-blur-xs text-white text-[10px] font-semibold items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 cursor-pointer"
           >
-            <Maximize2 className="w-3 h-3 text-amber-400" />
+            <Maximize2 className="w-3 h-3 text-[#00C1FD]" />
             <span>{t('zoomPhotoBtn')}</span>
           </button>
         </div>
@@ -272,7 +272,7 @@ export const SequentialShowcaseCards: React.FC<
                 outOfStock
                   ? 'text-rose-400'
                   : isLowStock
-                  ? 'text-amber-400'
+                  ? 'text-[#00C1FD]'
                   : 'text-emerald-400'
               }`}
             >
@@ -289,7 +289,7 @@ export const SequentialShowcaseCards: React.FC<
               ₹{product.price.toLocaleString('en-IN')}
             </span>
             {cartEntry && !isAdminMode && (
-              <span className="hidden sm:inline text-[11px] font-mono tabular-nums text-amber-400 font-semibold mt-1">
+              <span className="hidden sm:inline text-[11px] font-mono tabular-nums text-[#00C1FD] font-semibold mt-1">
                 {cartEntry.quantity} in cart · ₹
                 {(cartEntry.quantity * product.price).toLocaleString('en-IN')}
               </span>
@@ -399,7 +399,7 @@ export const SequentialShowcaseCards: React.FC<
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: [1, 1.35, 1], opacity: 1 }}
                     transition={{ duration: 0.28, ease: 'easeOut' }}
-                    className="absolute -top-1.5 -right-1.5 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 rounded-full bg-amber-500 text-zinc-950 font-mono tabular-nums text-[9px] sm:text-[11px] font-extrabold flex items-center justify-center shadow-xs ring-2 ring-[#222224]"
+                    className="absolute -top-1.5 -right-1.5 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 rounded-full bg-[#00C1FD] text-zinc-950 font-mono tabular-nums text-[9px] sm:text-[11px] font-extrabold flex items-center justify-center shadow-xs ring-2 ring-[#222224]"
                   >
                     {cartEntry.quantity}
                   </motion.span>
@@ -418,7 +418,7 @@ export const SequentialShowcaseCards: React.FC<
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-zinc-200 rounded-xl px-4 py-3 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-900">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="w-2 h-2 rounded-full bg-[#00C1FD]" />
             <span>{t('tabShowcaseCards')}</span>
           </span>
           <span className="text-zinc-300" aria-hidden="true">
@@ -453,9 +453,9 @@ export const SequentialShowcaseCards: React.FC<
             <button
               type="button"
               onClick={handleClearAllFromShowcase}
-              className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-[#00C1FD]/10 hover:bg-[#00C1FD]/20 border border-[#00C1FD]/30 text-zinc-900 text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <RotateCcw className="w-3 h-3" />
+              <RotateCcw className="w-3 h-3 text-[#00C1FD]" />
               <span>{t('clearAllBtn')}</span>
             </button>
           )}
@@ -617,7 +617,7 @@ export const SequentialShowcaseCards: React.FC<
                   onClick={() => setActiveIndex(idx)}
                   className={`px-2.5 py-1 rounded-lg font-mono tabular-nums text-xs font-bold transition-all cursor-pointer ${
                     idx === activeIndex
-                      ? 'bg-zinc-900 text-amber-400 scale-105 shadow-xs'
+                      ? 'bg-zinc-900 text-[#00C1FD] scale-105 shadow-xs'
                       : 'bg-white/80 text-zinc-600 hover:bg-white hover:text-zinc-900 border border-zinc-200'
                   }`}
                 >
