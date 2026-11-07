@@ -29,14 +29,21 @@ import {
   Columns2,
   Columns3,
   Grid2x2,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
+import { signInWithPopup, signOut } from 'firebase/auth';
+import { auth, googleAuthProvider } from './lib/firebase.ts';
 import {
   AdminProfile,
   BusinessSettings,
   CartItem,
+  CustomerOrder,
+  LiveNotification,
   OfflineAction,
   Product,
   StockMovement,
+  UserProfile,
 } from './types.ts';
 import {
   LanguageProvider,
@@ -50,17 +57,22 @@ import { AdminLoginView } from './components/AdminLoginView.tsx';
 import { AdminDashboardView } from './components/AdminDashboardView.tsx';
 import { SequentialShowcaseCards } from './components/SequentialShowcaseCards.tsx';
 import { ProductDetailSheetModal } from './components/ProductDetailSheetModal.tsx';
+import { LiveNotificationCenter } from './components/LiveNotificationCenter.tsx';
+import { AuthProfileHeader } from './components/AuthProfileHeader.tsx';
+import { CustomerOrdersModal } from './components/CustomerOrdersModal.tsx';
+import { ActionFeedbackToast, ActionToastData } from './components/ActionFeedbackToast.tsx';
+import { audioFeedback } from './utils/audioFeedback.ts';
 import { useDebounce } from './hooks/useDebounce.ts';
 
 const HERO_WORKSHOP_IMAGE =
-  '/src/assets/images/hero_workshop_bhatti_1794033589036.jpg';
+  '/images/hero_workshop_bhatti_1794033589036.jpg';
 
 const INITIAL_FALLBACK_PRODUCTS: Product[] = [
   {
     id: 1,
     name: 'Diesel Bhatti — Compact Commercial',
     size: 'Small',
-    imageUrl: '/src/assets/images/bhatti_small_model_1794033585976.jpg',
+    imageUrl: '/images/bhatti_small_model_1794033585976.jpg',
     price: 1850,
     stockQuantity: 45,
     isActive: true,
@@ -71,7 +83,7 @@ const INITIAL_FALLBACK_PRODUCTS: Product[] = [
     id: 2,
     name: 'Diesel Bhatti — Halwai Standard',
     size: 'Medium',
-    imageUrl: '/src/assets/images/bhatti_medium_model_1794033586446.jpg',
+    imageUrl: '/images/bhatti_medium_model_1794033586446.jpg',
     price: 2500,
     stockQuantity: 60,
     isActive: true,
@@ -82,7 +94,7 @@ const INITIAL_FALLBACK_PRODUCTS: Product[] = [
     id: 3,
     name: 'Diesel Bhatti — Heavy Duty Blower',
     size: 'Medium',
-    imageUrl: '/src/assets/images/bhatti_medium_model_1794033586446.jpg',
+    imageUrl: '/images/bhatti_medium_model_1794033586446.jpg',
     price: 2950,
     stockQuantity: 28,
     isActive: true,
@@ -93,7 +105,7 @@ const INITIAL_FALLBACK_PRODUCTS: Product[] = [
     id: 4,
     name: 'Diesel Bhatti — Langar & Catering',
     size: 'Large',
-    imageUrl: '/src/assets/images/bhatti_large_model_1794033589239.jpg',
+    imageUrl: '/images/bhatti_large_model_1794033589239.jpg',
     price: 3500,
     stockQuantity: 35,
     isActive: true,
@@ -104,7 +116,7 @@ const INITIAL_FALLBACK_PRODUCTS: Product[] = [
     id: 5,
     name: 'Diesel Bhatti — High-Pressure Dual Valve',
     size: 'Large',
-    imageUrl: '/src/assets/images/bhatti_large_model_1794033589239.jpg',
+    imageUrl: '/images/bhatti_large_model_1794033589239.jpg',
     price: 4200,
     stockQuantity: 6,
     isActive: true,
@@ -115,7 +127,7 @@ const INITIAL_FALLBACK_PRODUCTS: Product[] = [
     id: 6,
     name: 'Diesel Bhatti — Jumbo Double Burner + Tank',
     size: 'Extra Large',
-    imageUrl: '/src/assets/images/bhatti_jumbo_double_1794033588535.jpg',
+    imageUrl: '/images/bhatti_jumbo_double_1794033588535.jpg',
     price: 6800,
     stockQuantity: 4,
     isActive: true,
@@ -237,6 +249,57 @@ function SonuBhattiAppContent() {
     );
     return saved?.admin || null;
   });
+
+  // User Profile, Role-Based Access & Live Notifications State
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() =>
+    readCache<UserProfile | null>('sonu_bhatti_current_user', null)
+  );
+  const [notifications, setNotifications] = useState<LiveNotification[]>([]);
+  const [userOrders, setUserOrders] = useState<CustomerOrder[]>([]);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [liveToast, setLiveToast] = useState<{
+    title: string;
+    message: string;
+    type: string;
+  } | null>(null);
+
+  // Micro-Animations & Audio Feedback Toast State
+  const [actionToast, setActionToast] = useState<ActionToastData | null>(null);
+  const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() =>
+    audioFeedback.getMuted()
+  );
+
+  const showActionFeedback = useCallback(
+    (
+      title: string,
+      message?: string,
+      type: ActionToastData['type'] = 'general',
+      sound?: 'click' | 'add_to_cart' | 'remove_from_cart' | 'favorite' | 'order_placed' | 'delete' | 'notification' | 'stock_update'
+    ) => {
+      if (sound) {
+        audioFeedback.play(sound);
+      }
+      setActionToast({
+        id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        title,
+        message,
+        type,
+      });
+    },
+    []
+  );
+
+  const toggleSoundMute = () => {
+    const newMuted = audioFeedback.toggleMute();
+    setIsSoundMuted(newMuted);
+    showActionFeedback(
+      newMuted ? 'Sound Muted' : 'Sound Enabled',
+      newMuted ? 'Sound effects turned off' : 'Micro-audio feedback turned on',
+      'general'
+    );
+  };
+
   const [adminProducts, setAdminProducts] = useState<Product[]>(() =>
     readCache<Product[]>(CACHE_KEYS.ADMIN_PRODUCTS, INITIAL_FALLBACK_PRODUCTS)
   );
@@ -369,17 +432,170 @@ function SonuBhattiAppContent() {
     }
   }, [t]);
 
+  // Notifications & User Orders Sync
+  const fetchNotifications = useCallback(async (tokenToUse?: string | null) => {
+    try {
+      const token = tokenToUse ?? authTokenRef.current;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/notifications', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.notifications) {
+          setNotifications(data.notifications);
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
+  const fetchUserOrders = useCallback(async (tokenToUse?: string | null) => {
+    const token = tokenToUse ?? authTokenRef.current;
+    if (!token) return;
+    try {
+      const res = await fetch('/api/user/orders', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.orders) {
+          setUserOrders(data.orders);
+        }
+      }
+    } catch {
+      // offline fallback
+    }
+  }, []);
+
+  const handleMarkNotificationRead = async (id: number) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+    if (!authToken) return;
+    try {
+      await fetch(`/api/notifications/${id}/read`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    if (!authToken) return;
+    try {
+      await fetch('/api/notifications/mark-all-read', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  // Google Sign-In with Role Verification
+  const handleGoogleSignIn = async () => {
+    setIsAuthenticating(true);
+    try {
+      const cred = await signInWithPopup(auth, googleAuthProvider);
+      const idToken = await cred.user.getIdToken();
+      const res = await fetch('/api/auth/google-verify', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuthToken(idToken);
+        setCurrentUser(data.user);
+        writeCache('sonu_bhatti_current_user', data.user);
+
+        if (data.role === 'admin' && data.admin) {
+          setCurrentAdmin(data.admin);
+          writeCache(CACHE_KEYS.ADMIN_SESSION, {
+            token: idToken,
+            admin: data.admin,
+          });
+          void fetchAdminDashboard(idToken);
+        }
+        void fetchNotifications(idToken);
+        void fetchUserOrders(idToken);
+        setLiveToast({
+          title: `Welcome, ${data.user.name}!`,
+          message:
+            data.role === 'admin'
+              ? 'Administrator privileges active.'
+              : 'Signed in via Google. Real-time notifications and cloud orders enabled.',
+          type: 'auth',
+        });
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In failed:', err);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      if (authToken) {
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch(() => null);
+      }
+    } catch {
+      // ignore
+    }
+    setAuthToken(null);
+    setCurrentUser(null);
+    setCurrentAdmin(null);
+    setUserOrders([]);
+    localStorage.removeItem(CACHE_KEYS.ADMIN_SESSION);
+    localStorage.removeItem('sonu_bhatti_current_user');
+    setViewMode('public');
+  };
+
   // Initial Load & Connectivity Listeners
   useEffect(() => {
     fetchPublicCatalogue();
+    fetchNotifications();
+
     if (authTokenRef.current) {
-      fetchAdminDashboard(authTokenRef.current);
+      const token = authTokenRef.current;
+      fetchAdminDashboard(token);
+      fetchUserOrders(token);
+
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.user) {
+            setCurrentUser(data.user);
+            writeCache('sonu_bhatti_current_user', data.user);
+            if (data.admin) {
+              setCurrentAdmin(data.admin);
+            }
+          }
+        })
+        .catch(() => null);
     }
 
     const handleOnline = () => {
       setIsOnline(true);
       fetchPublicCatalogue();
+      fetchNotifications();
       flushOfflineQueue();
+      if (authTokenRef.current) {
+        fetchUserOrders(authTokenRef.current);
+      }
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -391,9 +607,9 @@ function SonuBhattiAppContent() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [fetchPublicCatalogue, fetchAdminDashboard, flushOfflineQueue]);
+  }, [fetchPublicCatalogue, fetchAdminDashboard, flushOfflineQueue, fetchNotifications, fetchUserOrders]);
 
-  // Real-Time Server-Sent Events (SSE) for instant Two-Admin Synchronization
+  // Real-Time Server-Sent Events (SSE) for instant Two-Admin Synchronization & Live Notifications
   useEffect(() => {
     if (!isOnline) return;
     const eventSource = new EventSource('/api/events');
@@ -414,6 +630,54 @@ function SonuBhattiAppContent() {
             fetchAdminDashboard(authTokenRef.current);
           }
         }
+
+        if (parsed.type === 'notification_new') {
+          const newNotif = parsed.payload;
+          if (newNotif) {
+            setNotifications((prev) => [
+              newNotif,
+              ...prev.filter((n) => n.id !== newNotif.id),
+            ]);
+            setLiveToast({
+              title: newNotif.title,
+              message: newNotif.message,
+              type: newNotif.type,
+            });
+          }
+        }
+
+        if (parsed.type === 'order_created') {
+          audioFeedback.play('notification');
+          fetchNotifications();
+          if (authTokenRef.current) {
+            fetchUserOrders(authTokenRef.current);
+            fetchAdminDashboard(authTokenRef.current);
+          }
+          const ord = parsed.payload?.order;
+          if (ord) {
+            setLiveToast({
+              title: `New Order #${ord.orderNumber}`,
+              message: `Order for ₹${ord.totalAmount?.toLocaleString('en-IN')} received.`,
+              type: 'order',
+            });
+          }
+        }
+
+        if (parsed.type === 'order_status_updated') {
+          audioFeedback.play('notification');
+          fetchNotifications();
+          if (authTokenRef.current) {
+            fetchUserOrders(authTokenRef.current);
+          }
+          const ord = parsed.payload?.order;
+          if (ord) {
+            setLiveToast({
+              title: `Order #${ord.orderNumber} Updated`,
+              message: `Status is now: ${ord.status?.toUpperCase()}`,
+              type: 'status',
+            });
+          }
+        }
       } catch {
         // ignore malformed event
       }
@@ -422,11 +686,17 @@ function SonuBhattiAppContent() {
     return () => {
       eventSource.close();
     };
-  }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard]);
+  }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard, fetchNotifications, fetchUserOrders]);
 
   // Cart Handlers
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
+    audioFeedback.play('add_to_cart');
+    showActionFeedback(
+      'Added to Cart',
+      `${product.name} (₹${product.price.toLocaleString('en-IN')})`,
+      'cart_add'
+    );
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
@@ -446,6 +716,24 @@ function SonuBhattiAppContent() {
       removeFromCart(productId);
       return;
     }
+    const currentItem = cart.find((i) => i.product.id === productId);
+    if (currentItem) {
+      if (newQty > currentItem.quantity) {
+        audioFeedback.play('add_to_cart');
+        showActionFeedback(
+          'Quantity Increased',
+          `${currentItem.product.name} (${newQty})`,
+          'cart_update'
+        );
+      } else {
+        audioFeedback.play('remove_from_cart');
+        showActionFeedback(
+          'Quantity Decreased',
+          `${currentItem.product.name} (${newQty})`,
+          'cart_update'
+        );
+      }
+    }
     setCart((prev) =>
       prev.map((item) =>
         item.product.id === productId
@@ -459,10 +747,23 @@ function SonuBhattiAppContent() {
   };
 
   const removeFromCart = (productId: number) => {
+    const item = cart.find((i) => i.product.id === productId);
+    audioFeedback.play('delete');
+    if (item) {
+      showActionFeedback('Removed from Cart', item.product.name, 'cart_remove');
+    }
     setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    audioFeedback.play('delete');
+    showActionFeedback(
+      'Cart Cleared',
+      'All items removed from cart',
+      'cart_remove'
+    );
+    setCart([]);
+  };
 
   // Admin Mutation Helpers (Support both Online Live DB & Offline Queue with Optimistic State)
   const enqueueOfflineAction = (
@@ -604,6 +905,12 @@ function SonuBhattiAppContent() {
     amount: number,
     note?: string
   ) => {
+    audioFeedback.play('stock_update');
+    showActionFeedback(
+      'Stock Adjusted',
+      `${actionType} ${amount} units for #${productId}`,
+      'stock_change'
+    );
     // 1. Instant optimistic stock update
     setAdminProducts((prev) => {
       const updated = prev.map((p) => {
@@ -654,6 +961,12 @@ function SonuBhattiAppContent() {
   };
 
   const handleDeleteProduct = async (productId: number) => {
+    audioFeedback.play('delete');
+    showActionFeedback(
+      'Product Deleted',
+      `Product #${productId} removed from catalogue`,
+      'product_delete'
+    );
     // 1. Instant optimistic removal from Admin, Public, and Cart states
     setAdminProducts((prev) => {
       const updated = prev.filter((p) => p.id !== productId);
@@ -917,18 +1230,83 @@ function SonuBhattiAppContent() {
           </a>
         </nav>
 
-        {/* Zone 3: 1 primary action */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button
+        {/* Zone 3: Live Notifications, Sound Toggle, Google Auth Profile & Shopping Cart */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Micro-Audio & Music Action Feedback Toggle */}
+          <motion.button
             type="button"
-            onClick={() => setIsCartOpen(true)}
-            className="px-4 py-2 text-xs font-bold text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-2"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={toggleSoundMute}
+            title={isSoundMuted ? 'Turn on Action Sound Effects' : 'Mute Action Sound Effects'}
+            aria-label={isSoundMuted ? 'Turn on Action Sound Effects' : 'Mute Action Sound Effects'}
+            className={`p-2 sm:px-2.5 sm:py-2 text-xs font-bold rounded-xl border transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+              isSoundMuted
+                ? 'border-zinc-200 bg-zinc-100 text-zinc-400 hover:bg-zinc-200'
+                : 'border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50'
+            }`}
+          >
+            {isSoundMuted ? (
+              <>
+                <VolumeX className="w-4 h-4 text-zinc-400" />
+                <span className="hidden xl:inline text-[11px] text-zinc-400">Muted</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-4 h-4 text-amber-500 animate-pulse" />
+                <span className="hidden xl:inline text-[11px] text-zinc-800 font-semibold">Sound On</span>
+              </>
+            )}
+          </motion.button>
+
+          <LiveNotificationCenter
+            notifications={notifications}
+            unreadCount={notifications.filter((n) => !n.isRead).length}
+            onMarkRead={handleMarkNotificationRead}
+            onMarkAllRead={handleMarkAllNotificationsRead}
+            userRole={currentUser?.role || (currentAdmin ? 'admin' : 'customer')}
+            onSelectOrder={() => {
+              setIsOrdersModalOpen(true);
+            }}
+          />
+
+          <AuthProfileHeader
+            user={currentUser}
+            onGoogleSignIn={handleGoogleSignIn}
+            onSignOut={handleSignOut}
+            onOpenOrders={() => setIsOrdersModalOpen(true)}
+            orderCount={userOrders.length}
+            isAdminPortalOpen={viewMode === 'admin_dashboard'}
+            onToggleAdminPortal={() => {
+              setViewMode((prev) =>
+                prev === 'admin_dashboard' ? 'public' : 'admin_dashboard'
+              );
+            }}
+            isAuthenticating={isAuthenticating}
+          />
+
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.93 }}
+            onClick={() => {
+              audioFeedback.play('click');
+              setIsCartOpen(true);
+            }}
+            className="px-3 sm:px-4 py-2 text-xs font-bold text-white bg-zinc-900 rounded-xl hover:bg-zinc-800 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm border border-zinc-700 active:scale-95"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
-            <span>
-              {t('cartButton')} ({totalCartItems})
-            </span>
-          </button>
+            <span className="hidden xs:inline">{t('cartButton')}</span>
+            <motion.span
+              key={totalCartItems}
+              initial={{ scale: 0.8 }}
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+              className="font-mono tabular-nums px-1.5 py-0.2 rounded-full bg-zinc-800 text-white font-bold text-[11px]"
+            >
+              {totalCartItems}
+            </motion.span>
+          </motion.button>
         </div>
       </header>
 
@@ -1429,6 +1807,13 @@ function SonuBhattiAppContent() {
                   onClearAllFilters={resetAllCatalogueFilters}
                   clearSignal={clearSignal}
                   onInspectProduct={(p) => setInspectedProduct(p)}
+                  onActionNotification={(title, message, type) =>
+                    showActionFeedback(
+                      title,
+                      message,
+                      (type as ActionToastData['type']) || 'general'
+                    )
+                  }
                 />
               ) : (
                 <div
@@ -1436,10 +1821,10 @@ function SonuBhattiAppContent() {
                     gridCols === 2
                       ? 'grid-cols-2 gap-3 sm:gap-6'
                       : gridCols === 3
-                      ? 'grid-cols-3 gap-2.5 sm:gap-5'
+                      ? 'grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5'
                       : gridCols === 4
-                      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5'
-                      : 'grid-cols-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-6'
+                      ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
+                      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
                   }`}
                 >
                   <AnimatePresence mode="popLayout">
@@ -1465,21 +1850,21 @@ function SonuBhattiAppContent() {
                             duration: 0.18,
                             ease: [0.16, 1, 0.3, 1],
                           }}
-                          className="group bg-white border border-zinc-200/90 hover:border-zinc-300 rounded-xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-1 hover:shadow-md cursor-pointer"
+                          className="group bg-[#222224] text-white border border-zinc-800 hover:border-zinc-700 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-1 shadow-[0_12px_30px_-10px_rgba(0,0,0,0.3)] hover:shadow-[0_20px_45px_-8px_rgba(0,0,0,0.45)] cursor-pointer ring-1 ring-white/10"
                         >
                           <div>
-                            {/* 1. Studio Diesel Bhatti Photograph Frame (4:3) */}
-                            <div className="relative aspect-[4/3] bg-gradient-to-b from-stone-100 to-stone-200/60 overflow-hidden border-b border-zinc-100">
+                            {/* 1. Studio Diesel Bhatti Photograph Inset Frame (4:3) */}
+                            <div className="relative aspect-[4/3] bg-[#EDEDED] overflow-hidden border-b border-zinc-800">
                               <ProductImage
                                 src={product.imageUrl}
                                 alt={product.name}
                                 sizeLabel={product.size}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain"
                                 enableHoverEffect={true}
                               />
 
                               {/* Subtle Ambient Bottom Vignette on Hover */}
-                              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
+                              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none" />
 
                               {/* Interactive Zoom / Inspect Trigger */}
                               <button
@@ -1488,28 +1873,28 @@ function SonuBhattiAppContent() {
                                   e.stopPropagation();
                                   setInspectedProduct(product);
                                 }}
-                                className="hidden sm:flex absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-zinc-900/80 backdrop-blur-xs text-white text-[10px] font-semibold items-center gap-1 opacity-90 group-hover:opacity-100 transition-all duration-150 cursor-pointer shadow-xs"
+                                className="hidden sm:flex absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-zinc-950/80 backdrop-blur-xs text-white text-[10px] font-semibold items-center gap-1 opacity-90 group-hover:opacity-100 transition-all duration-150 cursor-pointer shadow-xs border border-zinc-700"
                               >
-                                <Maximize2 className="w-3 h-3 text-amber-400" />
+                                <Maximize2 className="w-3 h-3 text-white" />
                                 <span>{t('zoomPhotoBtn')}</span>
                               </button>
                             </div>
 
-                            {/* Card Body: Responsive Compact Padding for 3-col Mobile & 4-col Desktop */}
-                            <div className="p-2.5 sm:p-4 space-y-1.5 sm:space-y-2.5">
-                              {/* Unboxed Metadata: Size & Stock Status */}
-                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-zinc-500">
-                                <span className="font-semibold text-zinc-700 truncate">
+                            {/* Card Body: Responsive Compact Padding for 2-col Mobile & 4-col Desktop */}
+                            <div className="p-3 sm:p-4 space-y-1.5 sm:space-y-2.5">
+                              {/* Metadata: Size & Stock Status */}
+                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-[10px] sm:text-xs text-zinc-400">
+                                <span className="font-semibold text-zinc-200 truncate">
                                   {translateSize(product.size)}
                                 </span>
                                 <span aria-hidden="true">·</span>
                                 <span
                                   className={`font-mono tabular-nums font-semibold ${
                                     outOfStock
-                                      ? 'text-red-600'
+                                      ? 'text-red-400'
                                       : isLowStock
-                                      ? 'text-amber-700'
-                                      : 'text-emerald-700'
+                                      ? 'text-zinc-300'
+                                      : 'text-zinc-200'
                                   }`}
                                 >
                                   {outOfStock
@@ -1519,29 +1904,29 @@ function SonuBhattiAppContent() {
                               </div>
 
                               {/* 2. Product Name */}
-                              <h2 className="text-xs sm:text-base font-bold text-zinc-900 leading-snug line-clamp-2 group-hover:text-amber-800 transition-colors">
+                              <h2 className="text-xs sm:text-base font-bold text-white leading-snug line-clamp-2 transition-colors">
                                 {product.name}
                               </h2>
 
                               {/* 4. Price */}
-                              <div className="pt-1 flex items-baseline justify-between border-t border-zinc-100">
-                                <span className="hidden sm:inline text-xs text-zinc-500">
+                              <div className="pt-1.5 flex items-baseline justify-between border-t border-zinc-800">
+                                <span className="hidden sm:inline text-xs text-zinc-400">
                                   {t('priceLabel')}
                                 </span>
-                                <span className="text-sm sm:text-lg font-extrabold font-mono tabular-nums text-zinc-900">
+                                <span className="text-sm sm:text-xl font-extrabold font-mono tabular-nums text-white">
                                   ₹{product.price.toLocaleString('en-IN')}
                                 </span>
                               </div>
                             </div>
                           </div>
 
-                          {/* Add to Cart / Quantity Stepper */}
+                          {/* Add to Cart / Quantity Stepper (Black & White Theme) */}
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            className="px-2.5 sm:px-4 pb-2.5 sm:pb-4 pt-1"
+                            className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1"
                           >
                             {cartEntry ? (
-                              <div className="flex items-center justify-between gap-1 sm:gap-2 p-1 rounded-lg bg-stone-100 border border-zinc-300">
+                              <div className="flex items-center justify-between gap-1 sm:gap-2 p-1 rounded-xl bg-zinc-900 border border-zinc-700">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1550,11 +1935,11 @@ function SonuBhattiAppContent() {
                                       cartEntry.quantity - 1
                                     )
                                   }
-                                  className="w-6 h-6 sm:w-8 sm:h-8 rounded-md bg-white border border-zinc-300 flex items-center justify-center text-zinc-800 hover:bg-zinc-100 cursor-pointer transition-colors"
+                                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white hover:bg-zinc-700 cursor-pointer transition-colors"
                                 >
-                                  <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <Minus className="w-3.5 h-3.5" />
                                 </button>
-                                <div className="text-[10px] sm:text-xs font-bold font-mono tabular-nums text-zinc-900 truncate">
+                                <div className="text-xs font-bold font-mono tabular-nums text-white truncate px-1">
                                   {cartEntry.quantity}
                                 </div>
                                 <button
@@ -1568,9 +1953,9 @@ function SonuBhattiAppContent() {
                                   disabled={
                                     cartEntry.quantity >= product.stockQuantity
                                   }
-                                  className="w-6 h-6 sm:w-8 sm:h-8 rounded-md bg-zinc-900 text-white flex items-center justify-center hover:bg-zinc-800 disabled:opacity-40 cursor-pointer transition-colors"
+                                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white text-zinc-950 flex items-center justify-center hover:bg-zinc-200 disabled:opacity-40 cursor-pointer transition-colors font-bold"
                                 >
-                                  <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  <Plus className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             ) : (
@@ -1578,9 +1963,9 @@ function SonuBhattiAppContent() {
                                 type="button"
                                 disabled={outOfStock}
                                 onClick={() => addToCart(product)}
-                                className="w-full py-1.5 sm:py-2.5 px-2 sm:px-4 rounded-lg bg-zinc-900 hover:bg-zinc-800 active:scale-[0.99] disabled:bg-zinc-200 disabled:text-zinc-500 text-white text-[11px] sm:text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                                className="w-full py-2 sm:py-2.5 px-2 sm:px-4 rounded-xl bg-[#EDEDED] hover:bg-white active:scale-[0.98] disabled:bg-zinc-800 disabled:text-zinc-600 text-[#1E1E20] text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm"
                               >
-                                <ShoppingBag className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 shrink-0" />
+                                <ShoppingBag className="w-3.5 h-3.5 text-[#1E1E20] shrink-0" />
                                 <span className="truncate">
                                   {outOfStock
                                     ? t('outOfStock')
@@ -1682,11 +2067,68 @@ function SonuBhattiAppContent() {
         onClearCart={clearCart}
         settings={settings}
         isOnline={isOnline}
+        currentUser={currentUser}
+        onOrderPlaced={(newOrder) => {
+          audioFeedback.play('order_placed');
+          showActionFeedback(
+            'Order Placed Successfully',
+            `Order #${newOrder.orderNumber} sent to workshop`,
+            'order_placed'
+          );
+          setUserOrders((prev) => [newOrder, ...prev]);
+          void fetchNotifications();
+        }}
         onStockVerifiedUpdate={(latest) => {
           setPublicProducts(latest);
           writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, latest);
         }}
       />
+
+      {/* Customer Orders & Real-time Fabrication Tracker Modal */}
+      <CustomerOrdersModal
+        isOpen={isOrdersModalOpen}
+        onClose={() => setIsOrdersModalOpen(false)}
+        orders={userOrders}
+        whatsappNumber={settings.whatsappNumber}
+      />
+
+      {/* Interactive Micro-Action Notification Toast with Spring Animation */}
+      <ActionFeedbackToast
+        toast={actionToast}
+        onDismiss={() => setActionToast(null)}
+      />
+
+      {/* Live Push Notification Floating Banner */}
+      <AnimatePresence>
+        {liveToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -15, scale: 0.95 }}
+            onClick={() => setLiveToast(null)}
+            className="fixed top-20 right-4 z-50 max-w-sm p-4 rounded-2xl bg-[#1c1c1e] text-white border border-zinc-700 shadow-2xl flex items-start gap-3 cursor-pointer ring-1 ring-white/10"
+          >
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h5 className="text-xs font-bold text-white leading-tight">
+                {liveToast.title}
+              </h5>
+              <p className="text-[11px] text-zinc-300 mt-0.5 leading-snug">
+                {liveToast.message}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLiveToast(null)}
+              className="text-zinc-500 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* =================================================================== */}
       {/* OFFLINE & AUTOMATIC SYNC INDICATOR                                  */}

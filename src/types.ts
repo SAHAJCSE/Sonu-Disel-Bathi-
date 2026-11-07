@@ -54,3 +54,50 @@ export interface OfflineAction {
   description: string;
   createdAt: string;
 }
+
+export interface UserProfile {
+  id?: number;
+  uid: string;
+  email: string;
+  name: string;
+  photoUrl?: string | null;
+  phone?: string | null;
+  role: 'admin' | 'customer' | 'staff';
+}
+
+export interface CustomerOrderItem {
+  id: number;
+  name: string;
+  size: string;
+  price: number;
+  quantity: number;
+}
+
+export interface CustomerOrder {
+  id: number;
+  orderNumber: string;
+  userUid?: string | null;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone: string;
+  itemsJson: string;
+  totalAmount: number;
+  status: 'pending' | 'confirmed' | 'dispatched' | 'completed' | 'cancelled';
+  shippingAddress?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveNotification {
+  id: number;
+  targetRole: 'all' | 'admin' | 'customer';
+  targetUserUid?: string | null;
+  title: string;
+  message: string;
+  type: 'order' | 'stock' | 'status' | 'announcement' | 'system';
+  referenceId?: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+

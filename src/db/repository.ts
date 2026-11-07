@@ -1,11 +1,15 @@
 import crypto from 'crypto';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, or } from 'drizzle-orm';
 import { db } from './index.ts';
 import {
   adminProfiles,
   businessSettings,
+  notifications,
+  orders,
   products,
   stockMovements,
+  userFavorites,
+  userProfiles,
 } from './schema.ts';
 
 export function hashAdminPassword(password: string): string {
@@ -538,3 +542,328 @@ export async function deleteProductSafely(productId: number) {
     throw new Error(error.message || 'Failed to delete product.', { cause: error });
   }
 }
+
+// ============================================================================
+// ROLE-BASED USER PROFILES (Admin, Simple User / Customer, Staff)
+// ============================================================================
+
+export const ADMIN_EMAILS = [
+  'sahajsingh81844@gmail.com',
+  'admin2@sonudieselbhatti.com',
+];
+
+export async function getOrRegisterUserProfile(
+  uid: string,
+  email: string,
+  name?: string,
+  photoUrl?: string
+) {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const isAdmin = ADMIN_EMAILS.includes(normalizedEmail);
+    const assignedRole = isAdmin ? 'admin' : 'customer';
+
+    const existing = await db
+      .select()
+      .from(userProfiles)
+      .where(or(eq(userProfiles.uid, uid), eq(userProfiles.email, normalizedEmail)));
+
+    if (existing.length > 0) {
+      const updated = await db
+        .update(userProfiles)
+        .set({
+          uid,
+          name: name || existing[0].name,
+          photoUrl: photoUrl || existing[0].photoUrl,
+          role: isAdmin ? 'admin' : existing[0].role,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.id, existing[0].id))
+        .returning();
+      return updated[0];
+    }
+
+    const inserted = await db
+      .insert(userProfiles)
+      .values({
+        uid,
+        email: normalizedEmail,
+        name: name || (isAdmin ? 'Administrator' : 'Valued Customer'),
+        photoUrl: photoUrl || null,
+        role: assignedRole,
+      })
+      .returning();
+
+    return inserted[0];
+  } catch (error: any) {
+    console.error('Database query failed in getOrRegisterUserProfile:', error);
+    throw new Error('Failed to register or retrieve user profile.', { cause: error });
+  }
+}
+
+export async function getUserProfileByUid(uid: string) {
+  try {
+    const rows = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.uid, uid));
+    return rows[0] || null;
+  } catch (error: any) {
+    console.error('Database query failed in getUserProfileByUid:', error);
+    return null;
+  }
+}
+
+export async function updateUserProfile(
+  uid: string,
+  data: { name?: string; phone?: string; photoUrl?: string }
+) {
+  try {
+    const rows = await db
+      .update(userProfiles)
+      .set({
+        ...(data.name ? { name: data.name } : {}),
+        ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.photoUrl ? { photoUrl: data.photoUrl } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(userProfiles.uid, uid))
+      .returning();
+    return rows[0] || null;
+  } catch (error: any) {
+    console.error('Database query failed in updateUserProfile:', error);
+    throw new Error('Failed to update user profile.', { cause: error });
+  }
+}
+
+// ============================================================================
+// ORDERS & CUSTOMER QUOTATIONS REPOSITORY
+// ============================================================================
+
+export async function createCustomerOrder(data: {
+  orderNumber: string;
+  userUid?: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone: string;
+  itemsJson: string;
+  totalAmount: number;
+  shippingAddress?: string;
+  notes?: string;
+}) {
+  try {
+    const rows = await db
+      .insert(orders)
+      .values({
+        orderNumber: data.orderNumber,
+        userUid: data.userUid || null,
+        customerName: data.customerName,
+        customerEmail: data.customerEmail || null,
+        customerPhone: data.customerPhone,
+        itemsJson: data.itemsJson,
+        totalAmount: data.totalAmount,
+        status: 'pending',
+        shippingAddress: data.shippingAddress || null,
+        notes: data.notes || null,
+      })
+      .returning();
+    return rows[0];
+  } catch (error: any) {
+    console.error('Database query failed in createCustomerOrder:', error);
+    throw new Error('Failed to create customer order.', { cause: error });
+  }
+}
+
+export async function getUserOrders(userUid: string) {
+  try {
+    return await db
+      .select()
+      .from(orders)
+      .where(eq(orders.userUid, userUid))
+      .orderBy(desc(orders.createdAt));
+  } catch (error: any) {
+    console.error('Database query failed in getUserOrders:', error);
+    return [];
+  }
+}
+
+export async function getAllOrdersForAdmin() {
+  try {
+    return await db
+      .select()
+      .from(orders)
+      .orderBy(desc(orders.createdAt));
+  } catch (error: any) {
+    console.error('Database query failed in getAllOrdersForAdmin:', error);
+    return [];
+  }
+}
+
+export async function updateOrderStatus(orderId: number, status: string) {
+  try {
+    const rows = await db
+      .update(orders)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+    return rows[0] || null;
+  } catch (error: any) {
+    console.error('Database query failed in updateOrderStatus:', error);
+    throw new Error('Failed to update order status.', { cause: error });
+  }
+}
+
+// ============================================================================
+// LIVE NOTIFICATIONS REPOSITORY
+// ============================================================================
+
+export async function createNotification(data: {
+  targetRole?: string;
+  targetUserUid?: string;
+  title: string;
+  message: string;
+  type?: string;
+  referenceId?: string;
+}) {
+  try {
+    const rows = await db
+      .insert(notifications)
+      .values({
+        targetRole: data.targetRole || 'all',
+        targetUserUid: data.targetUserUid || null,
+        title: data.title,
+        message: data.message,
+        type: data.type || 'system',
+        referenceId: data.referenceId || null,
+      })
+      .returning();
+    return rows[0];
+  } catch (error: any) {
+    console.error('Database query failed in createNotification:', error);
+    throw new Error('Failed to create notification.', { cause: error });
+  }
+}
+
+export async function getNotificationsForUser(role: string, userUid?: string) {
+  try {
+    if (role === 'admin') {
+      return await db
+        .select()
+        .from(notifications)
+        .orderBy(desc(notifications.createdAt))
+        .limit(50);
+    }
+
+    if (userUid) {
+      return await db
+        .select()
+        .from(notifications)
+        .where(
+          or(
+            eq(notifications.targetRole, 'all'),
+            eq(notifications.targetRole, 'customer'),
+            eq(notifications.targetUserUid, userUid)
+          )
+        )
+        .orderBy(desc(notifications.createdAt))
+        .limit(50);
+    }
+
+    return await db
+      .select()
+      .from(notifications)
+      .where(or(eq(notifications.targetRole, 'all'), eq(notifications.targetRole, 'customer')))
+      .orderBy(desc(notifications.createdAt))
+      .limit(30);
+  } catch (error: any) {
+    console.error('Database query failed in getNotificationsForUser:', error);
+    return [];
+  }
+}
+
+export async function markNotificationRead(id: number) {
+  try {
+    const rows = await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return rows[0] || null;
+  } catch (error: any) {
+    console.error('Database query failed in markNotificationRead:', error);
+    throw new Error('Failed to mark notification read.', { cause: error });
+  }
+}
+
+export async function markAllNotificationsRead(role: string, userUid?: string) {
+  try {
+    if (role === 'admin') {
+      return await db
+        .update(notifications)
+        .set({ isRead: true })
+        .returning();
+    }
+    if (userUid) {
+      return await db
+        .update(notifications)
+        .set({ isRead: true })
+        .where(
+          or(
+            eq(notifications.targetRole, 'all'),
+            eq(notifications.targetRole, 'customer'),
+            eq(notifications.targetUserUid, userUid)
+          )
+        )
+        .returning();
+    }
+    return [];
+  } catch (error: any) {
+    console.error('Database query failed in markAllNotificationsRead:', error);
+    return [];
+  }
+}
+
+// ============================================================================
+// USER FAVORITES (Cloud Sync across Devices)
+// ============================================================================
+
+export async function getUserFavorites(userUid: string) {
+  try {
+    const rows = await db
+      .select({ productId: userFavorites.productId })
+      .from(userFavorites)
+      .where(eq(userFavorites.userUid, userUid));
+    return rows.map((r) => r.productId);
+  } catch (error: any) {
+    console.error('Database query failed in getUserFavorites:', error);
+    return [];
+  }
+}
+
+export async function toggleUserFavorite(userUid: string, productId: number) {
+  try {
+    const existing = await db
+      .select()
+      .from(userFavorites)
+      .where(and(eq(userFavorites.userUid, userUid), eq(userFavorites.productId, productId)));
+
+    if (existing.length > 0) {
+      await db
+        .delete(userFavorites)
+        .where(and(eq(userFavorites.userUid, userUid), eq(userFavorites.productId, productId)));
+      return { favorited: false, productId };
+    } else {
+      await db
+        .insert(userFavorites)
+        .values({ userUid, productId });
+      return { favorited: true, productId };
+    }
+  } catch (error: any) {
+    console.error('Database query failed in toggleUserFavorite:', error);
+    throw new Error('Failed to toggle favorite.', { cause: error });
+  }
+}
+

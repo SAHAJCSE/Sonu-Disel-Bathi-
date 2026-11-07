@@ -17,10 +17,10 @@ import { ProductImage } from './ProductImage.tsx';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
 
 export const STUDIO_PRESET_PHOTOS: Record<string, string> = {
-  Small: '/src/assets/images/bhatti_small_model_1794033585976.jpg',
-  Medium: '/src/assets/images/bhatti_medium_model_1794033586446.jpg',
-  Large: '/src/assets/images/bhatti_large_model_1794033589239.jpg',
-  'Extra Large': '/src/assets/images/bhatti_jumbo_double_1794033588535.jpg',
+  Small: '/images/bhatti_small_model_1794033585976.jpg',
+  Medium: '/images/bhatti_medium_model_1794033586446.jpg',
+  Large: '/images/bhatti_large_model_1794033589239.jpg',
+  'Extra Large': '/images/bhatti_jumbo_double_1794033588535.jpg',
 };
 
 interface ImageUploaderFieldProps {

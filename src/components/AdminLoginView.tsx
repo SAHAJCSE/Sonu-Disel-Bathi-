@@ -88,10 +88,9 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
         headers: { Authorization: `Bearer ${idToken}` },
       });
       const data = await response.json();
-      if (!response.ok) {
+      if (!response.ok || !data.admin) {
         setErrorMsg(
-          data.error ||
-            'Google account is not one of the two pre-authorized administrators.'
+          'This Google account is signed in as a Customer. To access the Workshop Management Portal, please sign in with an Administrator Google Account (e.g. sahajsingh81844@gmail.com).'
         );
       } else {
         onLoginSuccess(idToken, data.admin);

@@ -13,8 +13,10 @@ import {
   AlertTriangle,
   Flame,
   ShoppingBag,
+  Truck,
+  Sparkles,
 } from 'lucide-react';
-import { BusinessSettings, CartItem, Product } from '../types.ts';
+import { BusinessSettings, CartItem, Product, UserProfile, CustomerOrder } from '../types.ts';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
 import { ProductImage } from './ProductImage.tsx';
 
@@ -28,6 +30,8 @@ interface CartReceiptModalProps {
   settings: BusinessSettings;
   isOnline: boolean;
   onStockVerifiedUpdate: (latestProducts: Product[]) => void;
+  currentUser?: UserProfile | null;
+  onOrderPlaced?: (order: CustomerOrder) => void;
 }
 
 export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
@@ -40,6 +44,8 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
   settings,
   isOnline,
   onStockVerifiedUpdate,
+  currentUser,
+  onOrderPlaced,
 }) => {
   const { t, translateSize } = useTranslation();
   const [receiptNumber, setReceiptNumber] = useState('');
@@ -59,6 +65,19 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
     }>
   >([]);
 
+  const [customerName, setCustomerName] = useState(currentUser?.name || '');
+  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '');
+  const [shippingAddress, setShippingAddress] = useState('');
+  const [customerNotes, setCustomerNotes] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [submittedOrder, setSubmittedOrder] = useState<CustomerOrder | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentUser?.name && !customerName) setCustomerName(currentUser.name);
+    if (currentUser?.phone && !customerPhone) setCustomerPhone(currentUser.phone);
+  }, [currentUser]);
+
   useEffect(() => {
     if (isOpen && cart.length > 0) {
       const now = new Date();
@@ -74,9 +93,55 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
         })
       );
       setPdfDownloaded(false);
+      setSubmittedOrder(null);
+      setSubmitError(null);
       verifyCartStock();
     }
   }, [isOpen]);
+
+  const handlePlaceDatabaseOrder = async () => {
+    if (!customerName.trim() || !customerPhone.trim()) {
+      setSubmitError('Please enter your Name and Mobile Phone Number to place the order.');
+      return;
+    }
+    setSubmitError(null);
+    setIsSubmittingOrder(true);
+
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: customerName.trim(),
+          customerPhone: customerPhone.trim(),
+          customerEmail: currentUser?.email,
+          shippingAddress: shippingAddress.trim() || undefined,
+          notes: customerNotes.trim() || undefined,
+          items: cart.map((c) => ({
+            id: c.product.id,
+            name: c.product.name,
+            size: c.product.size,
+            price: c.product.price,
+            quantity: c.quantity,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setSubmitError(data.error || 'Failed to submit order to database.');
+      } else {
+        setSubmittedOrder(data.order);
+        if (onOrderPlaced) {
+          onOrderPlaced(data.order);
+        }
+      }
+    } catch {
+      setSubmitError('Network error while placing order. Please check your connection.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
 
   const verifyCartStock = async () => {
     if (!isOnline || cart.length === 0) {
@@ -617,59 +682,204 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = ({
               </p>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 no-print">
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Download Receipt PDF Button (jsPDF) */}
-                <button
-                  type="button"
-                  onClick={handleDownloadPdf}
-                  disabled={isGeneratingPdf}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
-                >
-                  {pdfDownloaded ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>{t('receiptDownloadedMsg')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 text-amber-400" />
-                      <span>{t('downloadReceiptBtn')}</span>
-                    </>
-                  )}
-                </button>
+            {submittedOrder ? (
+              <div className="p-4 sm:p-6 rounded-2xl bg-[#1c1c1e] text-white border border-zinc-800 space-y-4 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-white">
+                      Order Placed & Stored in Database!
+                    </h4>
+                    <p className="text-xs text-zinc-400 font-mono">
+                      Order ID:{' '}
+                      <strong className="text-emerald-400">
+                        #{submittedOrder.orderNumber}
+                      </strong>{' '}
+                      · Live notification sent to workshop
+                    </p>
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 hover:bg-zinc-100 transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  <Printer className="w-4 h-4 text-zinc-600" />
-                  <span>{t('printReceipt')}</span>
-                </button>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Your order for{' '}
+                  <strong className="text-white font-mono">
+                    ₹{submittedOrder.totalAmount.toLocaleString('en-IN')}
+                  </strong>{' '}
+                  has been persisted into PostgreSQL. You can track its live fabrication status under{' '}
+                  <strong>My Orders</strong> anytime.
+                </p>
 
-                <button
-                  type="button"
-                  onClick={onClearCart}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-600 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t('clearCart')}</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDownloadPdf}
+                    className="px-4 py-2.5 rounded-xl bg-[#EDEDED] hover:bg-white text-zinc-950 font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-zinc-900" />
+                    <span>Download Official PDF Receipt</span>
+                  </button>
+
+                  <a
+                    href={buildWhatsAppUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Send to WhatsApp</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearCart();
+                      onClose();
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    Done & Close
+                  </button>
+                </div>
               </div>
+            ) : (
+              <>
+                {/* Customer Contact & Delivery Form */}
+                <div className="bg-stone-50 border border-zinc-200 rounded-xl p-3.5 sm:p-4 space-y-3 no-print">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Truck className="w-4 h-4 text-zinc-700" />
+                      <span>Customer Contact & Delivery Information</span>
+                    </h4>
+                    {currentUser && (
+                      <span className="text-[11px] font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        {currentUser.role === 'admin' ? '👑 Admin' : '👤 Customer'} ({currentUser.name.split(' ')[0]})
+                      </span>
+                    )}
+                  </div>
 
-              <a
-                href={buildWhatsAppUrl()}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => verifyCartStock()}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold shadow-sm transition-colors whitespace-nowrap"
-              >
-                <Send className="w-4 h-4" />
-                <span>{t('sendToWhatsApp')}</span>
-              </a>
-            </div>
+                  {submitError && (
+                    <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>{submitError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-zinc-600 block mb-1">
+                        Full Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="e.g. Gurpreet Singh / Sonu"
+                        className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-zinc-600 block mb-1">
+                        Mobile Phone / WhatsApp <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="e.g. 9876543210"
+                        className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-mono font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-600 block mb-1">
+                      Delivery City / Workshop Address (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingAddress}
+                      onChange={(e) => setShippingAddress(e.target.value)}
+                      placeholder="e.g. Shop #12, Industrial Area, Ludhiana, Punjab"
+                      className="w-full px-3 py-2 rounded-lg border border-zinc-300 text-xs bg-white text-zinc-900 focus:ring-1 focus:ring-zinc-900 focus:outline-none font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 no-print">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Download Receipt PDF Button (jsPDF) */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadPdf}
+                      disabled={isGeneratingPdf}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
+                    >
+                      {pdfDownloaded ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>{t('receiptDownloadedMsg')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4 text-amber-400" />
+                          <span>{t('downloadReceiptBtn')}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-800 hover:bg-zinc-100 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Printer className="w-4 h-4 text-zinc-600" />
+                      <span>{t('printReceipt')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={onClearCart}
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-600 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{t('clearCart')}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Place Official Order directly into Database */}
+                    <button
+                      type="button"
+                      disabled={isSubmittingOrder || cart.length === 0}
+                      onClick={handlePlaceDatabaseOrder}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 disabled:opacity-50 text-white text-xs font-bold shadow-md transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap border border-zinc-700"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>
+                        {isSubmittingOrder
+                          ? 'Saving to Database...'
+                          : 'Place Order in Database'}
+                      </span>
+                    </button>
+
+                    <a
+                      href={buildWhatsAppUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => verifyCartStock()}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-colors whitespace-nowrap"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{t('sendToWhatsApp')}</span>
+                    </a>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

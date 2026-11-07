@@ -16,6 +16,7 @@ import {
 import { CartItem, Product } from '../types.ts';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
 import { ProductImage } from './ProductImage.tsx';
+import { audioFeedback } from '../utils/audioFeedback.ts';
 
 interface SequentialShowcaseCardsProps {
   products: Product[];
@@ -28,6 +29,7 @@ interface SequentialShowcaseCardsProps {
   hasActiveExternalFilters?: boolean;
   onClearAllFilters?: () => void;
   clearSignal?: number;
+  onActionNotification?: (title: string, message?: string, type?: string) => void;
   // Optional Admin actions when used inside Admin Dashboard
   isAdminMode?: boolean;
   onAdminEdit?: (product: Product) => void;
@@ -74,6 +76,7 @@ export const SequentialShowcaseCards: React.FC<
   hasActiveExternalFilters = false,
   onClearAllFilters,
   clearSignal = 0,
+  onActionNotification,
   isAdminMode = false,
   onAdminEdit,
   onAdminDelete,
@@ -113,6 +116,18 @@ export const SequentialShowcaseCards: React.FC<
 
   const toggleFavorite = (productId: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    const isAdding = !favoriteIds.includes(productId);
+    audioFeedback.play('favorite');
+
+    const matched = products.find((p) => p.id === productId);
+    if (onActionNotification) {
+      onActionNotification(
+        isAdding ? 'Saved to Favorites' : 'Removed from Favorites',
+        matched?.name,
+        isAdding ? 'favorite_add' : 'favorite_remove'
+      );
+    }
+
     setFavoriteIds((prev) =>
       prev.includes(productId)
         ? prev.filter((id) => id !== productId)
@@ -207,19 +222,26 @@ export const SequentialShowcaseCards: React.FC<
             <span>{seqNumber}</span>
           </div>
 
-          {/* Top-Right Circular Dark Heart Button (Exact match to product card ui.jpeg) */}
-          <button
+          {/* Top-Right Circular Dark Heart Button with micro-bounce spring */}
+          <motion.button
+            whileTap={{ scale: 0.75 }}
+            whileHover={{ scale: 1.15 }}
             type="button"
             onClick={(e) => toggleFavorite(product.id, e)}
             aria-label="Save to favorites"
-            className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-[#222224] hover:bg-zinc-800 text-white flex items-center justify-center shadow-md transition-transform duration-150 hover:scale-105 active:scale-90 cursor-pointer"
+            className="absolute top-2 right-2 sm:top-3 sm:right-3 w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-[#222224] hover:bg-zinc-800 text-white flex items-center justify-center shadow-md transition-colors cursor-pointer"
           >
-            <Heart
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
-                isFav ? 'fill-rose-500 text-rose-500' : 'text-white'
-              }`}
-            />
-          </button>
+            <motion.div
+              animate={{ scale: isFav ? [1, 1.35, 1] : 1 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+            >
+              <Heart
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-colors ${
+                  isFav ? 'fill-rose-500 text-rose-500' : 'text-white'
+                }`}
+              />
+            </motion.div>
+          </motion.button>
 
           {/* Bottom-Left Quick Zoom Trigger on Hover */}
           <button
@@ -310,38 +332,79 @@ export const SequentialShowcaseCards: React.FC<
             >
               {/* If already in cart, show compact - button */}
               {cartEntry && onUpdateCartQty && (
-                <button
+                <motion.button
                   type="button"
-                  onClick={() =>
-                    onUpdateCartQty(product.id, cartEntry.quantity - 1)
-                  }
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.85 }}
+                  onClick={() => {
+                    audioFeedback.play('remove_from_cart');
+                    const nextQty = cartEntry.quantity - 1;
+                    onUpdateCartQty(product.id, nextQty);
+                    if (onActionNotification) {
+                      onActionNotification(
+                        nextQty === 0 ? 'Removed from Cart' : 'Quantity Decreased',
+                        `${product.name} (${nextQty} in cart)`,
+                        'cart_update'
+                      );
+                    }
+                  }}
                   aria-label="Decrease quantity"
-                  className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700 transition-colors cursor-pointer"
+                  className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center border border-zinc-700 transition-colors cursor-pointer shadow-xs"
                 >
                   <Minus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                </button>
+                </motion.button>
               )}
 
-              {/* Signature Squircle Light Bag Button from product card ui.jpeg */}
-              <button
+              {/* Signature Squircle Light Bag Button from product card ui.jpeg with micro-bounce */}
+              <motion.button
                 type="button"
+                whileHover={
+                  outOfStock || Boolean(cartEntry && cartEntry.quantity >= product.stockQuantity)
+                    ? {}
+                    : { scale: 1.06 }
+                }
+                whileTap={
+                  outOfStock || Boolean(cartEntry && cartEntry.quantity >= product.stockQuantity)
+                    ? {}
+                    : { scale: 0.90 }
+                }
+                transition={{ type: 'spring', stiffness: 450, damping: 18 }}
                 disabled={
                   outOfStock ||
                   Boolean(
                     cartEntry && cartEntry.quantity >= product.stockQuantity
                   )
                 }
-                onClick={() => onAddToCart && onAddToCart(product)}
+                onClick={() => {
+                  if (onAddToCart) {
+                    audioFeedback.play('add_to_cart');
+                    onAddToCart(product);
+                    if (onActionNotification) {
+                      const newQty = (cartEntry?.quantity || 0) + 1;
+                      onActionNotification(
+                        cartEntry ? 'Quantity Increased' : 'Added to Cart',
+                        `${product.name} (${newQty} in cart)`,
+                        'cart_add'
+                      );
+                    }
+                  }
+                }}
                 aria-label={t('addToCart')}
-                className="relative w-9 h-9 sm:w-13 sm:h-13 rounded-[12px] sm:rounded-[18px] bg-[#EDEDED] hover:bg-white disabled:bg-zinc-700 disabled:text-zinc-500 text-[#1E1E20] flex items-center justify-center shadow-md transition-all duration-150 hover:scale-105 active:scale-95 cursor-pointer"
+                className="relative w-9 h-9 sm:w-13 sm:h-13 rounded-[12px] sm:rounded-[18px] bg-[#EDEDED] hover:bg-white disabled:bg-zinc-700 disabled:text-zinc-500 text-[#1E1E20] flex items-center justify-center shadow-md transition-colors duration-150 cursor-pointer"
               >
                 <BagAddUpIcon className="w-4 h-4 sm:w-6 sm:h-6" />
                 {cartEntry && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 rounded-full bg-amber-500 text-zinc-950 font-mono tabular-nums text-[9px] sm:text-[11px] font-extrabold flex items-center justify-center shadow-xs">
+                  <motion.span
+                    key={cartEntry.quantity}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: [1, 1.35, 1], opacity: 1 }}
+                    transition={{ duration: 0.28, ease: 'easeOut' }}
+                    className="absolute -top-1.5 -right-1.5 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 rounded-full bg-amber-500 text-zinc-950 font-mono tabular-nums text-[9px] sm:text-[11px] font-extrabold flex items-center justify-center shadow-xs ring-2 ring-[#222224]"
+                  >
                     {cartEntry.quantity}
-                  </span>
+                  </motion.span>
                 )}
-              </button>
+              </motion.button>
             </div>
           )}
         </div>
@@ -445,16 +508,16 @@ export const SequentialShowcaseCards: React.FC<
           </button>
         </div>
       ) : displayLayout === 'grid' ? (
-        /* SEQUENTIAL GRID VIEW (#01, #02, #03...) WITH CONFIGURABLE COLUMNS (2, 3, or max 4 in a row) */
+        /* SEQUENTIAL GRID VIEW (#01, #02, #03...) STRICT 2-COL MOBILE -> 3-COL TABLET -> MAX 4-COL DESKTOP */
         <div
           className={`grid pt-2 pb-4 ${
             gridCols === 2
               ? 'grid-cols-2 gap-3 sm:gap-6'
               : gridCols === 3
-              ? 'grid-cols-3 gap-2.5 sm:gap-5'
+              ? 'grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-5'
               : gridCols === 4
-              ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5'
-              : 'grid-cols-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-6'
+              ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
+              : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6'
           }`}
         >
           <AnimatePresence mode="popLayout">

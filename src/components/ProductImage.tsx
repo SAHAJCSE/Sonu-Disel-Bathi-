@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Flame } from 'lucide-react';
+import { resolveProductImageUrl } from '../assets/bhattiImages.ts';
 
 interface ProductImageProps {
   src: string;
@@ -19,12 +20,14 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   const [hasError, setHasError] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const resolvedSrc = resolveProductImageUrl(src, sizeLabel);
+
   useEffect(() => {
     setHasError(false);
     setIsLoaded(false);
-  }, [src]);
+  }, [src, sizeLabel]);
 
-  if (!src || hasError) {
+  if (!resolvedSrc || hasError) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-800 to-stone-900 text-stone-200 p-4 text-center ${className}`}
@@ -48,9 +51,9 @@ export const ProductImage: React.FC<ProductImageProps> = ({
         <div className="absolute inset-0 bg-gradient-to-r from-stone-200 via-stone-100 to-stone-200 animate-pulse" />
       )}
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
-        referrerPolicy="no-referrer"
+        loading="lazy"
         onLoad={() => setIsLoaded(true)}
         onError={() => setHasError(true)}
         className={`${className} transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${

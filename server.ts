@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
 import { GoogleGenAI, Type } from '@google/genai';
-import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
+import { requireAuth, requireAdmin, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
 import {
   getPublicProducts,
   getAllProductsForAdmin,
@@ -21,6 +21,19 @@ import {
   clearAdminSession,
   resetAdminPassword,
   updateAdminProfileConfig,
+  getOrRegisterUserProfile,
+  getUserProfileByUid,
+  updateUserProfile,
+  createCustomerOrder,
+  getUserOrders,
+  getAllOrdersForAdmin,
+  updateOrderStatus,
+  createNotification,
+  getNotificationsForUser,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getUserFavorites,
+  toggleUserFavorite,
 } from './src/db/repository.ts';
 
 dotenv.config();
@@ -313,11 +326,16 @@ app.post('/api/auth/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response) => {
+app.get('/api/auth/me', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const allAdmins = await getAllAdmins();
+    if (!req.user) {
+      return res.json({ user: null, role: 'guest', allAdmins: [] });
+    }
+    const allAdmins = req.user.role === 'admin' ? await getAllAdmins() : [];
     res.json({
-      admin: req.admin,
+      user: req.user,
+      admin: req.admin || null,
+      role: req.user.role,
       allAdmins,
     });
   } catch (error: any) {
@@ -325,9 +343,48 @@ app.get('/api/auth/me', requireAuth, async (req: AuthRequest, res: Response) => 
   }
 });
 
-app.post('/api/auth/logout', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/auth/google-verify', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    if (req.admin) {
+    // Trigger welcome notification for new users
+    if (req.user && req.user.role === 'customer') {
+      try {
+        const welcomeNotif = await createNotification({
+          targetRole: 'customer',
+          targetUserUid: req.user.uid,
+          title: `Welcome, ${req.user.name}!`,
+          message: 'You can now place orders, track diesel bhatti dispatches, and save models to your cloud profile.',
+          type: 'system',
+        });
+        broadcastRealtimeEvent('notification_new', welcomeNotif);
+      } catch {
+        // ignore notification error
+      }
+    }
+
+    res.json({
+      ok: true,
+      user: req.user,
+      admin: req.admin || null,
+      role: req.user?.role || 'customer',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Google verification failed' });
+  }
+});
+
+app.put('/api/user/profile', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, phone, photoUrl } = req.body;
+    const updated = await updateUserProfile(req.user!.uid, { name, phone, photoUrl });
+    res.json({ success: true, user: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update profile' });
+  }
+});
+
+app.post('/api/auth/logout', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (req.admin?.id) {
       await clearAdminSession(req.admin.id);
     }
     res.json({ ok: true });
@@ -337,10 +394,214 @@ app.post('/api/auth/logout', requireAuth, async (req: AuthRequest, res: Response
 });
 
 // ============================================================================
-// PROTECTED ADMIN DASHBOARD & INVENTORY ROUTES
+// LIVE CUSTOMER ORDERS & QUOTATIONS (Connected directly to Cloud SQL)
 // ============================================================================
 
-app.get('/api/admin/dashboard', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/orders', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { customerName, customerPhone, customerEmail, shippingAddress, notes, items } = req.body;
+    if (!customerName || !customerPhone || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Customer name, phone, and at least 1 item are required.' });
+    }
+
+    const orderNumber = `SDB-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+    const totalAmount = items.reduce(
+      (sum: number, item: any) => sum + Number(item.price) * Number(item.quantity || 1),
+      0
+    );
+
+    const order = await createCustomerOrder({
+      orderNumber,
+      userUid: req.user?.uid || undefined,
+      customerName: String(customerName).trim(),
+      customerEmail: customerEmail ? String(customerEmail).trim() : req.user?.email || undefined,
+      customerPhone: String(customerPhone).trim(),
+      itemsJson: JSON.stringify(items),
+      totalAmount,
+      shippingAddress: shippingAddress ? String(shippingAddress).trim() : undefined,
+      notes: notes ? String(notes).trim() : undefined,
+    });
+
+    // 1. Notify Admins immediately in PostgreSQL
+    const adminNotification = await createNotification({
+      targetRole: 'admin',
+      title: 'New Customer Order Placed',
+      message: `Order #${orderNumber} for ₹${totalAmount.toLocaleString('en-IN')} by ${customerName} (${customerPhone}).`,
+      type: 'order',
+      referenceId: orderNumber,
+    });
+
+    // 2. Notify Customer if logged in
+    let customerNotification = null;
+    if (req.user?.uid) {
+      customerNotification = await createNotification({
+        targetRole: 'customer',
+        targetUserUid: req.user.uid,
+        title: 'Order Confirmed',
+        message: `Your diesel bhatti order #${orderNumber} has been received. Our team will verify and dispatch shortly.`,
+        type: 'order',
+        referenceId: orderNumber,
+      });
+    }
+
+    // 3. Broadcast Live Real-time SSE event
+    broadcastRealtimeEvent('order_created', {
+      order,
+      notification: adminNotification,
+    });
+
+    if (customerNotification) {
+      broadcastRealtimeEvent('notification_new', customerNotification);
+    }
+
+    res.status(201).json({
+      success: true,
+      order,
+      orderNumber,
+      notification: customerNotification || adminNotification,
+    });
+  } catch (error: any) {
+    console.error('Error in POST /api/orders:', error);
+    res.status(500).json({ error: error.message || 'Failed to submit order' });
+  }
+});
+
+app.get('/api/user/orders', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const ordersList = await getUserOrders(req.user!.uid);
+    res.json({ orders: ordersList });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch user orders' });
+  }
+});
+
+// ============================================================================
+// LIVE NOTIFICATIONS (Real-time in-app alerts stored in Cloud SQL)
+// ============================================================================
+
+app.get('/api/notifications', optionalAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const role = req.user?.role || 'customer';
+    const notifs = await getNotificationsForUser(role, req.user?.uid);
+    res.json({ notifications: notifs });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch notifications' });
+  }
+});
+
+app.put('/api/notifications/:id/read', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const updated = await markNotificationRead(id);
+    res.json({ success: true, notification: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to mark notification read' });
+  }
+});
+
+app.put('/api/notifications/mark-all-read', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const role = req.user?.role || 'customer';
+    await markAllNotificationsRead(role, req.user?.uid);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to mark all read' });
+  }
+});
+
+// ============================================================================
+// USER FAVORITES (Cloud Sync across Devices)
+// ============================================================================
+
+app.get('/api/user/favorites', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const favorites = await getUserFavorites(req.user!.uid);
+    res.json({ favorites });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch favorites' });
+  }
+});
+
+app.post('/api/user/favorites/toggle', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { productId } = req.body;
+    if (!productId) return res.status(400).json({ error: 'productId required' });
+    const result = await toggleUserFavorite(req.user!.uid, Number(productId));
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to toggle favorite' });
+  }
+});
+
+// ============================================================================
+// PROTECTED ADMIN DASHBOARD & INVENTORY ROUTES (Role: 'admin' only)
+// ============================================================================
+
+app.get('/api/admin/orders', requireAdmin, async (_req: AuthRequest, res: Response) => {
+  try {
+    const ordersList = await getAllOrdersForAdmin();
+    res.json({ orders: ordersList });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to fetch admin orders' });
+  }
+});
+
+app.put('/api/admin/orders/:id/status', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const orderId = Number(req.params.id);
+    const { status } = req.body;
+    if (!status) return res.status(400).json({ error: 'Status is required' });
+
+    const updated = await updateOrderStatus(orderId, status);
+    if (!updated) return res.status(404).json({ error: 'Order not found' });
+
+    let custNotif = null;
+    if (updated.userUid) {
+      custNotif = await createNotification({
+        targetRole: 'customer',
+        targetUserUid: updated.userUid,
+        title: `Order #${updated.orderNumber} ${status.toUpperCase()}`,
+        message: `Your diesel bhatti order status was updated to: ${status}.`,
+        type: 'status',
+        referenceId: updated.orderNumber,
+      });
+    }
+
+    broadcastRealtimeEvent('order_status_updated', {
+      order: updated,
+      notification: custNotif,
+    });
+
+    if (custNotif) {
+      broadcastRealtimeEvent('notification_new', custNotif);
+    }
+
+    res.json({ success: true, order: updated });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update order status' });
+  }
+});
+
+app.post('/api/admin/notifications/broadcast', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { title, message, targetRole } = req.body;
+    if (!title || !message) return res.status(400).json({ error: 'Title and message required' });
+
+    const notif = await createNotification({
+      targetRole: targetRole || 'all',
+      title: String(title),
+      message: String(message),
+      type: 'announcement',
+    });
+
+    broadcastRealtimeEvent('notification_new', notif);
+    res.json({ success: true, notification: notif });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to broadcast notification' });
+  }
+});
+
+app.get('/api/admin/dashboard', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const [productsList, movements, settings, admins] = await Promise.all([
       getAllProductsForAdmin(),
@@ -362,7 +623,7 @@ app.get('/api/admin/dashboard', requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
-app.post('/api/admin/products', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { name, size, imageUrl, price, stockQuantity, note, clientActionId } = req.body;
 
@@ -405,7 +666,7 @@ app.post('/api/admin/products', requireAuth, async (req: AuthRequest, res: Respo
   }
 });
 
-app.put('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+app.put('/api/admin/products/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const productId = Number(req.params.id);
     const {
@@ -454,7 +715,7 @@ app.put('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res: Re
   }
 });
 
-app.post('/api/admin/products/:id/stock', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/admin/products/:id/stock', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const productId = Number(req.params.id);
     const { actionType, amount, note, clientActionId } = req.body;
@@ -492,7 +753,7 @@ app.post('/api/admin/products/:id/stock', requireAuth, async (req: AuthRequest, 
   }
 });
 
-app.delete('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+app.delete('/api/admin/products/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const productId = Number(req.params.id);
     const result = await deleteProductSafely(productId);
@@ -509,7 +770,7 @@ app.delete('/api/admin/products/:id', requireAuth, async (req: AuthRequest, res:
   }
 });
 
-app.put('/api/admin/settings', requireAuth, async (req: AuthRequest, res: Response) => {
+app.put('/api/admin/settings', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { businessName, logoUrl, whatsappNumber, defaultLanguage, lowStockThreshold } = req.body;
     const updated = await updateBusinessSettings({
@@ -533,7 +794,7 @@ app.put('/api/admin/settings', requireAuth, async (req: AuthRequest, res: Respon
   }
 });
 
-app.put('/api/admin/profile/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+app.put('/api/admin/profile/:id', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const adminId = Number(req.params.id);
     const { email, name, newPassword } = req.body;
@@ -561,7 +822,7 @@ app.put('/api/admin/profile/:id', requireAuth, async (req: AuthRequest, res: Res
 });
 
 // Offline Queue Batch Synchronization Endpoint
-app.post('/api/admin/sync-batch', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/admin/sync-batch', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const actions: Array<{
       id: string;
@@ -669,7 +930,7 @@ function getGeminiClient() {
   });
 }
 
-app.post('/api/admin/ai/parse-voice', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/admin/ai/parse-voice', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { transcript, language } = req.body;
     if (!transcript || !String(transcript).trim()) {
@@ -829,7 +1090,7 @@ Rules:
   }
 });
 
-app.post('/api/admin/ai/parse-ocr', requireAuth, async (req: AuthRequest, res: Response) => {
+app.post('/api/admin/ai/parse-ocr', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { imageBase64, mimeType } = req.body;
     if (!imageBase64) {
@@ -943,13 +1204,19 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    const publicPath = path.join(process.cwd(), 'public');
+    const assetsImagesPath = path.join(process.cwd(), 'src/assets/images');
+
+    app.use('/images', express.static(path.join(publicPath, 'images')));
+    app.use('/src/assets/images', express.static(assetsImagesPath));
     app.use(express.static(distPath));
+    app.use(express.static(publicPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
