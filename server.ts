@@ -286,9 +286,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     const trimmedPassword = String(password || '').trim();
 
-    // Direct master admin access with password 1234
-    if (trimmedPassword === '1234') {
-      const token = `sdb_sess_1234_${Date.now()}`;
+    // Direct master admin access with password 0988
+    if (trimmedPassword === '0988') {
+      const token = `sdb_sess_0988_${Date.now()}`;
       let targetAdmin = null;
       try {
         const admins = await getAllAdmins();
@@ -303,22 +303,22 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         token,
         admin: {
           id: targetAdmin?.id || 1,
-          uid: targetAdmin?.uid || 'admin-master-1234',
+          uid: targetAdmin?.uid || 'admin-master-0988',
           email: targetAdmin?.email || 'admin@sonubhatti.com',
-          name: targetAdmin?.name || 'Administrator (Passcode 1234)',
+          name: targetAdmin?.name || 'Administrator',
           role: 'admin',
         },
       });
     }
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Please enter password 1234 to access the Admin Portal.' });
+      return res.status(400).json({ error: 'Please enter the admin passcode to access the Portal.' });
     }
 
     const admin = await loginAdminWithPassword(String(email), String(password));
     if (!admin) {
       return res.status(401).json({
-        error: 'Invalid password. Enter passcode 1234 for direct Admin Portal access.',
+        error: 'Invalid password. Enter the correct admin passcode.',
       });
     }
 
@@ -679,12 +679,6 @@ app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Resp
       });
     }
 
-    const dedupeSignature = `${String(name).trim().toLowerCase()}|${String(size).trim().toLowerCase()}|${Number(price)}`;
-    const existingLock = recentProductCreationLocks.get(dedupeSignature);
-    if (existingLock && Date.now() - existingLock.timestamp < 6000) {
-      return res.status(200).json({ product: existingLock.product, deduplicated: true });
-    }
-
     const created = await createProductWithStockLog(
       {
         name: String(name).trim(),
@@ -696,11 +690,6 @@ app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Resp
       req.admin!.email,
       note ? String(note) : undefined
     );
-
-    recentProductCreationLocks.set(dedupeSignature, {
-      timestamp: Date.now(),
-      product: created,
-    });
 
     if (clientActionId) {
       processedOfflineIds.add(clientActionId);

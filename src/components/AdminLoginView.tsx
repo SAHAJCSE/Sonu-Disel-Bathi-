@@ -10,7 +10,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
   onLoginSuccess,
   onBackToCatalogue,
 }) => {
-  const [password, setPassword] = useState('1234');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -27,21 +27,21 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
       });
       const data = await response.json();
       if (!response.ok) {
-        setErrorMsg(data.error || 'Invalid passcode. Use 1234.');
+        setErrorMsg(data.error || 'Invalid passcode.');
       } else {
         onLoginSuccess(data.token, data.admin);
       }
     } catch {
-      if (password.trim() === '1234') {
-        onLoginSuccess(`sdb_sess_1234_${Date.now()}`, {
+      if (password.trim() === '0988') {
+        onLoginSuccess(`sdb_sess_0988_${Date.now()}`, {
           id: 1,
-          uid: 'admin-master-1234',
+          uid: 'admin-master-0988',
           email: 'admin@sonubhatti.com',
           name: 'Administrator',
           role: 'admin',
         });
       } else {
-        setErrorMsg('Invalid passcode. Use 1234.');
+        setErrorMsg('Invalid passcode.');
       }
     } finally {
       setLoading(false);
@@ -78,16 +78,13 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
           <div>
             <div className="flex items-center justify-between text-xs mb-1.5">
               <label className="font-medium text-zinc-700">Passcode</label>
-              <span className="font-mono text-[11px] text-zinc-500">
-                Passcode: 1234
-              </span>
             </div>
             <input
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="1234"
+              placeholder="••••"
               className="w-full px-3 py-2.5 text-sm font-mono tracking-wider rounded-md bg-white border border-zinc-300 text-zinc-950 focus:outline-none focus:border-zinc-950"
             />
           </div>

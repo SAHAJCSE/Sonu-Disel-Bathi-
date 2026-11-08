@@ -34,6 +34,7 @@ import {
   Lock,
   Mic,
   MicOff,
+  MessageCircle,
 } from 'lucide-react';
 import {
   AdminProfile,
@@ -655,79 +656,109 @@ function SonuBhattiAppContent() {
   // Real-Time Server-Sent Events (SSE) for instant Two-Admin Synchronization & Live Notifications
   useEffect(() => {
     if (!isOnline) return;
-    const eventSource = new EventSource('/api/events');
 
-    eventSource.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data);
-        if (
-          parsed.type === 'product_created' ||
-          parsed.type === 'product_updated' ||
-          parsed.type === 'stock_updated' ||
-          parsed.type === 'product_deleted' ||
-          parsed.type === 'settings_updated' ||
-          parsed.type === 'batch_synced'
-        ) {
-          fetchPublicCatalogue();
-          if (authTokenRef.current) {
-            fetchAdminDashboard(authTokenRef.current);
-          }
-        }
+    let eventSource: EventSource | null = null;
+    let retryTimeout: number | null = null;
 
-        if (parsed.type === 'notification_new') {
-          const newNotif = parsed.payload;
-          if (newNotif) {
-            setNotifications((prev) => [
-              newNotif,
-              ...prev.filter((n) => n.id !== newNotif.id),
-            ]);
-            setLiveToast({
-              title: newNotif.title,
-              message: newNotif.message,
-              type: newNotif.type,
-            });
-          }
-        }
+    const connectSSE = () => {
+      if (eventSource) eventSource.close();
+      
+      eventSource = new EventSource('/api/events');
 
-        if (parsed.type === 'order_created') {
-          audioFeedback.play('notification');
-          fetchNotifications();
-          if (authTokenRef.current) {
-            fetchUserOrders(authTokenRef.current);
-            fetchAdminDashboard(authTokenRef.current);
-          }
-          const ord = parsed.payload?.order;
-          if (ord) {
-            setLiveToast({
-              title: `New Order #${ord.orderNumber}`,
-              message: `Order for ₹${ord.totalAmount?.toLocaleString('en-IN')} received.`,
-              type: 'order',
-            });
-          }
-        }
+      eventSource.onopen = () => {
+        console.log('Real-time sync connected.');
+      };
 
-        if (parsed.type === 'order_status_updated') {
-          audioFeedback.play('notification');
-          fetchNotifications();
-          if (authTokenRef.current) {
-            fetchUserOrders(authTokenRef.current);
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          
+          // Debug log for sync issues
+          console.log(`Sync Event [${parsed.type}] received`);
+
+          if (
+            parsed.type === 'product_created' ||
+            parsed.type === 'product_updated' ||
+            parsed.type === 'stock_updated' ||
+            parsed.type === 'product_deleted' ||
+            parsed.type === 'settings_updated' ||
+            parsed.type === 'batch_synced'
+          ) {
+            fetchPublicCatalogue();
+            if (authTokenRef.current) {
+              fetchAdminDashboard(authTokenRef.current);
+            }
           }
-          const ord = parsed.payload?.order;
-          if (ord) {
-            setLiveToast({
-              title: `Order #${ord.orderNumber} Updated`,
-              message: `Status is now: ${ord.status?.toUpperCase()}`,
-              type: 'status',
-            });
+
+          if (parsed.type === 'notification_new') {
+            const newNotif = parsed.payload;
+            if (newNotif) {
+              setNotifications((prev) => [
+                newNotif,
+                ...prev.filter((n) => n.id !== newNotif.id),
+              ]);
+              setLiveToast({
+                title: newNotif.title,
+                message: newNotif.message,
+                type: newNotif.type,
+              });
+            }
           }
+
+          if (parsed.type === 'order_created') {
+            audioFeedback.play('notification');
+            fetchNotifications();
+            if (authTokenRef.current) {
+              fetchUserOrders(authTokenRef.current);
+              fetchAdminDashboard(authTokenRef.current);
+            }
+            const ord = parsed.payload?.order;
+            if (ord) {
+              setLiveToast({
+                title: `New Order #${ord.orderNumber}`,
+                message: `Order for ₹${ord.totalAmount?.toLocaleString('en-IN')} received.`,
+                type: 'order',
+              });
+            }
+          }
+
+          if (parsed.type === 'order_status_updated') {
+            audioFeedback.play('notification');
+            fetchNotifications();
+            if (authTokenRef.current) {
+              fetchUserOrders(authTokenRef.current);
+            }
+            const ord = parsed.payload?.order;
+            if (ord) {
+              setLiveToast({
+                title: `Order #${ord.orderNumber} Updated`,
+                message: `Status is now: ${ord.status?.toUpperCase()}`,
+                type: 'status',
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Error parsing sync event:', err);
         }
-      } catch {
-        // ignore malformed event
-      }
+      };
+
+      eventSource.onerror = (err) => {
+        console.warn('Real-time sync connection lost. Retrying in 5s...', err);
+        if (eventSource) eventSource.close();
+        eventSource = null;
+        
+        if (retryTimeout) window.clearTimeout(retryTimeout);
+        retryTimeout = window.setTimeout(() => {
+          if (navigator.onLine) connectSSE();
+        }, 5000);
+      };
     };
 
+    connectSSE();
+
     return () => {
-      eventSource.close();
+      if (eventSource) eventSource.close();
+      if (retryTimeout) window.clearTimeout(retryTimeout);
     };
   }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard, fetchNotifications, fetchUserOrders]);
 
@@ -1209,7 +1240,8 @@ function SonuBhattiAppContent() {
           !q ||
           p.name.toLowerCase().includes(q) ||
           p.size.toLowerCase().includes(q) ||
-          String(p.price).includes(q);
+          String(p.price).includes(q) ||
+          p.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''));
 
         const matchesPriceBucket =
           priceFilter === 'ALL'
@@ -1660,113 +1692,93 @@ function SonuBhattiAppContent() {
                 </div>
               </div>
 
-              {/* Row 2: Dynamic Price Tier Pills + Interactive Max Price Ceiling Slider */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100">
-                {/* Interactive Dynamic Price Tier Chips */}
-                <div className="flex flex-wrap items-center gap-1.5">
+              {/* Row 2: Clean Dynamic Price Selection (Buttons + Custom Input) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
-                    {t('priceLabel')}:
+                    Price:
                   </span>
-                  {(
-                    [
-                      { id: 'ALL', label: t('filterPriceAll') },
-                      { id: 'UNDER_2500', label: '< ₹2,500' },
-                      { id: '2500_TO_4000', label: '₹2,500 – ₹4,000' },
-                      { id: 'ABOVE_4000', label: '> ₹4,000' },
-                    ] as const
-                  ).map((tier) => {
-                    const count = getPriceBucketCount(tier.id);
-                    const active = priceFilter === tier.id;
+                  {[
+                    { id: 'ALL', label: 'Any', value: null },
+                    { id: '2500', label: '< 2.5k', value: 2500 },
+                    { id: '5000', label: '< 5k', value: 5000 },
+                    { id: '10000', label: '< 10k', value: 10000 },
+                  ].map((btn) => {
+                    const active = (btn.value === null && maxPriceLimit === null) || (btn.value !== null && maxPriceLimit === btn.value);
                     return (
                       <button
-                        key={tier.id}
+                        key={btn.id}
                         type="button"
                         onClick={() => {
-                          setPriceFilter(tier.id);
-                          setMaxPriceLimit(null);
+                          setPriceFilter('ALL');
+                          setMaxPriceLimit(btn.value);
                         }}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 border ${
+                        className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all border cursor-pointer ${
                           active
-                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
-                            : 'bg-stone-50 text-zinc-700 border-zinc-200 hover:bg-stone-100'
+                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
+                            : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
                         }`}
                       >
-                        <span>{tier.label}</span>
-                        <span
-                          className={`font-mono text-[10px] px-1 rounded ${
-                            active
-                              ? 'bg-emerald-800 text-emerald-100'
-                              : 'bg-zinc-200/70 text-zinc-600'
-                          }`}
-                        >
-                          {count}
-                        </span>
+                        {btn.label}
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Live Max Price Slider Control */}
-                <div className="flex items-center gap-2.5 bg-stone-50 border border-zinc-200 rounded-xl px-3 py-1.5">
-                  <span className="text-[11px] font-semibold text-zinc-600 whitespace-nowrap">
-                    Max Budget:
-                  </span>
-                  <input
-                    type="range"
-                    min={catalogPriceBounds.min}
-                    max={catalogPriceBounds.max}
-                    step={50}
-                    value={effectiveMaxPrice}
-                    onChange={(e) => {
-                      const nextVal = Number(e.target.value);
-                      setPriceFilter('ALL');
-                      setMaxPriceLimit(
-                        nextVal >= catalogPriceBounds.max ? null : nextVal
-                      );
-                    }}
-                    className="w-24 sm:w-32 accent-emerald-600 cursor-pointer h-1.5 bg-zinc-200 rounded-lg"
-                    aria-label="Maximum price budget slider"
-                  />
-                  <span className="font-mono tabular-nums text-xs font-extrabold text-emerald-700 min-w-[62px] text-right">
-                    ≤ ₹{effectiveMaxPrice.toLocaleString('en-IN')}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase">Max Budget:</span>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">₹</span>
+                    <input
+                      type="number"
+                      placeholder="Custom"
+                      value={maxPriceLimit || ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? null : Number(e.target.value);
+                        setPriceFilter('ALL');
+                        setMaxPriceLimit(val);
+                      }}
+                      className="w-20 sm:w-24 pl-5 pr-2 py-1 rounded-lg border border-zinc-200 bg-stone-50 focus:bg-white text-[11px] font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-900 transition-colors"
+                    />
+                    {maxPriceLimit && (
+                      <button 
+                        onClick={() => setMaxPriceLimit(null)}
+                        className="absolute -right-1 -top-1 w-3.5 h-3.5 bg-zinc-400 text-white rounded-full flex items-center justify-center hover:bg-zinc-600 cursor-pointer"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Row 3: Size Segmented Control + Live Count */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 border-t border-zinc-100">
-                <div className="flex flex-wrap items-center gap-1 p-1 bg-stone-100 rounded-xl border border-stone-200/80">
-                  {[
-                    { value: 'ALL', label: t('filterAllSizes') },
-                    { value: 'Small', label: t('sizeSmall') },
-                    { value: 'Medium', label: t('sizeMedium') },
-                    { value: 'Large', label: t('sizeLarge') },
-                    { value: 'Extra Large', label: t('sizeExtraLarge') },
-                  ].map((sz) => {
-                    const count = getSizeCount(sz.value);
-                    const isSelected = selectedSize === sz.value;
-                    return (
-                      <button
-                        key={sz.value}
-                        type="button"
-                        onClick={() => setSelectedSize(sz.value)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-zinc-900 text-white shadow-2xs'
-                            : 'text-zinc-600 hover:text-zinc-900 hover:bg-white/60'
-                        }`}
-                      >
-                        <span>{sz.label}</span>
-                        <span
-                          className={`text-[10px] font-mono tabular-nums ${
-                            isSelected ? 'text-[#00C1FD]' : 'text-zinc-400'
-                          }`}
-                        >
-                          ({count})
-                        </span>
-                      </button>
-                    );
-                  })}
+              {/* Row 3: Size Dropdown Selection + Result Summary */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    Bhatti Size:
+                  </span>
+                  <div className="relative">
+                    <Maximize2 className="w-3 h-3 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
+                      value={selectedSize}
+                      onChange={(e) => setSelectedSize(e.target.value)}
+                      className="pl-8 pr-8 py-1.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 text-[11px] font-bold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 transition-all cursor-pointer appearance-none"
+                    >
+                      {[
+                        { value: 'ALL', label: t('filterAllSizes') },
+                        { value: 'Small', label: t('sizeSmall') },
+                        { value: 'Medium', label: t('sizeMedium') },
+                        { value: 'Large', label: t('sizeLarge') },
+                        { value: 'Extra Large', label: t('sizeExtraLarge') },
+                      ].map((sz) => (
+                        <option key={sz.value} value={sz.value}>
+                          {sz.label} ({getSizeCount(sz.value)})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronRight className="w-3 h-3 text-zinc-400 absolute right-2 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
+                  </div>
                 </div>
 
                 <div className="text-xs text-zinc-500 font-medium flex items-center justify-between sm:justify-end gap-2">
@@ -1907,58 +1919,86 @@ function SonuBhattiAppContent() {
                             className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1"
                           >
                             {cartEntry ? (
-                              <div className="flex items-center justify-between gap-1.5 p-1 rounded-xl bg-stone-100 border border-zinc-200">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    updateCartQty(
-                                      product.id,
-                                      cartEntry.quantity - 1
-                                    )
-                                  }
-                                  aria-label="Decrease quantity"
-                                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-600 hover:bg-red-700 text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <div className="text-xs sm:text-sm font-extrabold font-mono tabular-nums text-zinc-900 truncate px-1">
-                                  {cartEntry.quantity}
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex-1 flex items-center justify-between gap-1.5 p-1 rounded-xl bg-stone-100 border border-zinc-200">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateCartQty(
+                                        product.id,
+                                        cartEntry.quantity - 1
+                                      )
+                                    }
+                                    aria-label="Decrease quantity"
+                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-600 hover:bg-red-700 text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                                  >
+                                    <Minus className="w-3.5 h-3.5" />
+                                  </button>
+                                  <div className="text-xs sm:text-sm font-extrabold font-mono tabular-nums text-zinc-900 truncate px-1">
+                                    {cartEntry.quantity}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateCartQty(
+                                        product.id,
+                                        cartEntry.quantity + 1
+                                      )
+                                    }
+                                    disabled={
+                                      cartEntry.quantity >= product.stockQuantity
+                                    }
+                                    aria-label="Increase quantity"
+                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors font-bold shadow-2xs"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    updateCartQty(
-                                      product.id,
-                                      cartEntry.quantity + 1
-                                    )
-                                  }
-                                  disabled={
-                                    cartEntry.quantity >= product.stockQuantity
-                                  }
-                                  aria-label="Increase quantity"
-                                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors font-bold shadow-2xs"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const text = `*Inquiry for Sonu Diesel Bhatti*\n\nProduct: *${product.name}*\nSize: ${product.size}\nPrice: ₹${product.price.toLocaleString('en-IN')}\n\nIs this model available for dispatch?`;
+                                    window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                  }}
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-zinc-200 hover:bg-emerald-50 hover:border-emerald-500 text-emerald-600 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                                  title="Inquire on WhatsApp"
                                 >
-                                  <Plus className="w-3.5 h-3.5" />
+                                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                disabled={outOfStock}
-                                onClick={() => addToCart(product)}
-                                className={`w-full py-2 sm:py-2.5 px-3 rounded-xl text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs ${
-                                  outOfStock
-                                    ? 'bg-red-50 text-red-600 border border-red-200 cursor-not-allowed'
-                                    : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white'
-                                }`}
-                              >
-                                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-                                <span className="truncate">
-                                  {outOfStock
-                                    ? t('outOfStock')
-                                    : t('addToCart')}
-                                </span>
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={outOfStock}
+                                  onClick={() => addToCart(product)}
+                                  className={`flex-1 py-2 sm:py-2.5 px-3 rounded-xl text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs ${
+                                    outOfStock
+                                      ? 'bg-red-50 text-red-600 border border-red-200 cursor-not-allowed'
+                                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white'
+                                  }`}
+                                >
+                                  <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                                  <span className="truncate">
+                                    {outOfStock
+                                      ? t('outOfStock')
+                                      : t('addToCart')}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const text = `*Inquiry for Sonu Diesel Bhatti*\n\nProduct: *${product.name}*\nSize: ${product.size}\nPrice: ₹${product.price.toLocaleString('en-IN')}\n\nIs this model available for dispatch?`;
+                                    window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
+                                  }}
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-zinc-200 hover:bg-emerald-50 hover:border-emerald-500 text-emerald-600 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                                  title="Inquire on WhatsApp"
+                                >
+                                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </motion.article>

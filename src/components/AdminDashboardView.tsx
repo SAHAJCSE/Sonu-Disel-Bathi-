@@ -373,7 +373,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   const handleSaveProductForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProduct || imageUploading) return;
+    if (!editingProduct) return;
 
     const cleanName = (editingProduct.name || '').trim() || 'Diesel Bhatti';
     const cleanSize = editingProduct.size || 'Medium';
