@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
+import { Mic } from 'lucide-react';
 import {
   AdminProfile,
   BusinessSettings,
@@ -10,6 +11,7 @@ import {
 import { ProductImage } from './ProductImage.tsx';
 import { audioFeedback } from '../utils/audioFeedback.ts';
 import { ImageCropperModal } from './ImageCropperModal.tsx';
+import { AdminSmartEntry } from './AdminSmartEntry.tsx';
 
 interface AdminDashboardViewProps {
   currentAdmin: AdminProfile;
@@ -21,8 +23,8 @@ interface AdminDashboardViewProps {
   isOnline: boolean;
   offlineQueue: OfflineAction[];
   isSyncing: boolean;
-  activeTab: 'inventory' | 'history' | 'settings';
-  onTabChange: (tab: 'inventory' | 'history' | 'settings') => void;
+  activeTab: 'inventory' | 'smart_entry' | 'history' | 'settings';
+  onTabChange: (tab: 'inventory' | 'smart_entry' | 'history' | 'settings') => void;
   onSyncNow: () => void;
   onLogout: () => void;
   onCreateProduct: (data: {
@@ -67,6 +69,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   products,
   movements,
   settings,
+  authToken,
   isOnline,
   offlineQueue,
   isSyncing,
@@ -506,6 +509,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           )}
           <button
             type="button"
+            onClick={() => onTabChange('smart_entry')}
+            className="px-3.5 py-1.5 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          >
+            <Mic className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Voice Add</span>
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setIsCreating(true);
               setEditingProduct({
@@ -604,7 +615,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Navigation Tabs & Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="inline-flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 w-fit transition-colors">
+        <div className="inline-flex flex-wrap bg-zinc-100 dark:bg-zinc-900 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 w-fit transition-colors">
           <button
             type="button"
             onClick={() => onTabChange('inventory')}
@@ -615,6 +626,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             }`}
           >
             Inventory ({products.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('smart_entry')}
+            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'smart_entry'
+                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Mic className="w-3.5 h-3.5 text-amber-500" />
+            <span>Voice & Smart Entry</span>
           </button>
           <button
             type="button"
@@ -797,6 +820,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {activeTab === 'smart_entry' && (
+        <AdminSmartEntry
+          products={products}
+          authToken={authToken}
+          isOnline={isOnline}
+          onCreateProduct={onCreateProduct}
+          onUpdateProduct={onUpdateProduct}
+          onAdjustStock={onAdjustStock}
+        />
       )}
 
       {activeTab === 'history' && (

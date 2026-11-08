@@ -183,14 +183,14 @@ function SonuBhattiAppContent() {
   const [viewMode, setViewMode] = useState<
     'public' | 'admin_login' | 'admin_dashboard'
   >('public');
-  const [adminTab, setAdminTab] = useState<'inventory' | 'history' | 'settings'>('inventory');
+  const [adminTab, setAdminTab] = useState<'inventory' | 'smart_entry' | 'history' | 'settings'>('inventory');
   
   const [viewHistory, setViewHistory] = useState<
-    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'history' | 'settings' }[]
+    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'smart_entry' | 'history' | 'settings' }[]
   >([]);
 
   const handleNavigate = useCallback(
-    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'history' | 'settings') => {
+    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'smart_entry' | 'history' | 'settings') => {
       if (newMode === viewMode && (!newTab || newTab === adminTab)) return;
       
       setViewHistory((prev) => [...prev, { mode: viewMode, tab: adminTab }]);

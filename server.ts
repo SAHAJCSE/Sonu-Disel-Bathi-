@@ -999,19 +999,20 @@ app.post('/api/admin/ai/parse-voice', requireAdmin, async (req: AuthRequest, res
     const ai = getGeminiClient();
 
     if (ai) {
-      const productCatalogContext = existingProducts.map((p) => ({
-        id: p.id,
-        name: p.name,
-        size: p.size,
-        price: p.price,
-        stockQuantity: p.stockQuantity,
-      }));
+      try {
+        const productCatalogContext = existingProducts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          size: p.size,
+          price: p.price,
+          stockQuantity: p.stockQuantity,
+        }));
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `Parse this administrator voice command (spoken in English, Hindi, or Punjabi, language hint: ${
-          language || 'auto'
-        }) for "Sonu Diesel Bhatti" inventory management.
+        const geminiCall = ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `Parse this administrator voice command (spoken in English, Hindi, or Punjabi, language hint: ${
+            language || 'auto'
+          }) for "Sonu Diesel Bhatti" inventory management.
 Voice Transcript: "${transcript}"
 Current Products in Database: ${JSON.stringify(productCatalogContext)}
 
@@ -1022,66 +1023,81 @@ Rules:
    - "UPDATE_PRICE": Changing price ("price ... kar do", "rate ... set karo") of an existing product.
    - "UPDATE_BOTH": Changing both price and stock of an existing product.
 2. If the command refers to a size like "Medium", "Large", "Small", or "Extra Large" and multiple existing products have that size (without clarifying which specific model name), put all matching product IDs in "ambiguousProductIds" and set "isAmbiguous" to true so the admin can select the exact product.
-3. Extract product name, size ("Small", "Medium", "Large", or "Extra Large"), price (integer INR), stockActionType ("ADD", "REMOVE", "ADJUST"), and stockAmount (integer).`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              intent: {
-                type: Type.STRING,
-                description: 'CREATE_PRODUCT, UPDATE_STOCK, UPDATE_PRICE, or UPDATE_BOTH',
-              },
-              matchedProductId: {
-                type: Type.INTEGER,
-                description: 'ID of the single matched existing product, or 0 if new or ambiguous',
-              },
-              isAmbiguous: {
-                type: Type.BOOLEAN,
-                description: 'True if multiple existing products match the spoken description',
-              },
-              ambiguousProductIds: {
-                type: Type.ARRAY,
-                items: { type: Type.INTEGER },
-                description: 'IDs of candidate products when ambiguous',
-              },
-              name: {
-                type: Type.STRING,
-                description: 'Product name',
-              },
-              size: {
-                type: Type.STRING,
-                description: 'Small, Medium, Large, or Extra Large',
-              },
-              price: {
-                type: Type.INTEGER,
-                description: 'Price in INR (0 if not mentioned)',
-              },
-              stockActionType: {
-                type: Type.STRING,
-                description: 'ADD, REMOVE, or ADJUST',
-              },
-              stockAmount: {
-                type: Type.INTEGER,
-                description: 'Quantity to add, remove, or set',
-              },
-              summaryText: {
-                type: Type.STRING,
-                description: 'Human-readable summary of the detected command',
+3. Extract product name (e.g. "16x36 Diesel Bhatti" or "Diesel Bhatti"), size ("Small", "Medium", "Large", "Extra Large", or specific dimensions like "16x36"), price (integer INR), stockActionType ("ADD", "REMOVE", "ADJUST"), and stockAmount (integer). For commands like "10 bathi 16 36 2500₹ ki hai", interpret quantity=10, size="16x36", price=2500, intent="CREATE_PRODUCT".`,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                intent: {
+                  type: Type.STRING,
+                  description: 'CREATE_PRODUCT, UPDATE_STOCK, UPDATE_PRICE, or UPDATE_BOTH',
+                },
+                matchedProductId: {
+                  type: Type.INTEGER,
+                  description: 'ID of the single matched existing product, or 0 if new or ambiguous',
+                },
+                isAmbiguous: {
+                  type: Type.BOOLEAN,
+                  description: 'True if multiple existing products match the spoken description',
+                },
+                ambiguousProductIds: {
+                  type: Type.ARRAY,
+                  items: { type: Type.INTEGER },
+                  description: 'IDs of candidate products when ambiguous',
+                },
+                name: {
+                  type: Type.STRING,
+                  description: 'Product name',
+                },
+                size: {
+                  type: Type.STRING,
+                  description: 'Small, Medium, Large, Extra Large, or dimensions like 16x36',
+                },
+                price: {
+                  type: Type.INTEGER,
+                  description: 'Price in INR (0 if not mentioned)',
+                },
+                stockActionType: {
+                  type: Type.STRING,
+                  description: 'ADD, REMOVE, or ADJUST',
+                },
+                stockAmount: {
+                  type: Type.INTEGER,
+                  description: 'Quantity to add, remove, or set',
+                },
+                summaryText: {
+                  type: Type.STRING,
+                  description: 'Human-readable summary of the detected command',
+                },
               },
             },
           },
-        },
-      });
+        });
 
-      const parsed = JSON.parse((response.text ?? '{}').trim());
-      return res.json({ parsed });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI parse timeout')), 4000)
+        );
+
+        const response: any = await Promise.race([geminiCall, timeoutPromise]);
+        const parsed = JSON.parse((response.text ?? '{}').trim());
+        if (parsed && parsed.intent) {
+          return res.json({ parsed });
+        }
+      } catch (aiErr) {
+        console.warn('Gemini voice parse skipped, falling back to deterministic parser:', aiErr);
+      }
     }
 
     // Fallback deterministic parser if Gemini API key is not configured
     const textLower = String(transcript).toLowerCase();
     let detectedSize = 'Medium';
-    if (textLower.includes('small') || textLower.includes('chota') || textLower.includes('ਛੋਟਾ')) {
+    
+    // Improved size detection for patterns like "16 36" or "10x12"
+    const sizeMatches = textLower.match(/(\d+)\s*[xX\s]\s*(\d+)/);
+    if (sizeMatches) {
+      detectedSize = `${sizeMatches[1]}x${sizeMatches[2]}`;
+    } else if (textLower.includes('small') || textLower.includes('chota') || textLower.includes('ਛੋਟਾ')) {
       detectedSize = 'Small';
     } else if (textLower.includes('extra large') || textLower.includes('jumbo')) {
       detectedSize = 'Extra Large';
@@ -1094,10 +1110,35 @@ Rules:
       (p) => p.size.toLowerCase() === detectedSize.toLowerCase()
     );
 
-    const isAddProduct =
-      textLower.includes('add ') && (textLower.includes('price') || numbers.length >= 2);
+    // Heuristic: If we have multiple numbers and keywords like "bhatti" or "bathi" or "add"
+    const isProductAddKeywords = textLower.includes('add') || textLower.includes('bathi') || textLower.includes('bhatti') || textLower.includes('nayi') || textLower.includes('new');
+    const isAddProduct = isProductAddKeywords && numbers.length >= 2;
 
     if (isAddProduct) {
+      // "10 bathi 16 36 2500" -> numbers might be [10, 16, 36, 2500]
+      // Try to find price (usually larger) and stock
+      let price = 2500;
+      let stock = 10;
+      
+      if (numbers.length >= 2) {
+        // If we found a size match with regex, exclude those numbers from price/stock
+        let remainingNums = [...numbers];
+        if (sizeMatches) {
+          const s1 = Number(sizeMatches[1]);
+          const s2 = Number(sizeMatches[2]);
+          remainingNums = numbers.filter(n => n !== s1 && n !== s2);
+        }
+        
+        if (remainingNums.length >= 2) {
+          // Assume larger number is price
+          price = Math.max(...remainingNums);
+          stock = Math.min(...remainingNums);
+        } else if (remainingNums.length === 1) {
+          price = remainingNums[0] > 100 ? remainingNums[0] : 2500;
+          stock = remainingNums[0] <= 100 ? remainingNums[0] : 10;
+        }
+      }
+
       return res.json({
         parsed: {
           intent: 'CREATE_PRODUCT',
@@ -1106,12 +1147,10 @@ Rules:
           ambiguousProductIds: [],
           name: `${detectedSize} Diesel Bhatti`,
           size: detectedSize,
-          price: numbers[0] || 2500,
+          price,
           stockActionType: 'ADJUST',
-          stockAmount: numbers[1] ?? 10,
-          summaryText: `Create ${detectedSize} Diesel Bhatti at ₹${numbers[0] || 2500} with stock ${
-            numbers[1] ?? 10
-          }`,
+          stockAmount: stock,
+          summaryText: `Create ${detectedSize} Diesel Bhatti at ₹${price} with stock ${stock}`,
         },
       });
     }
