@@ -9,6 +9,7 @@ interface ProductDetailSheetModalProps {
   allProducts: Product[];
   cart: CartItem[];
   settings: BusinessSettings;
+  currentUser: any;
   onClose: () => void;
   onSelectProduct: (product: Product) => void;
   onAddToCart: (product: Product) => void;
@@ -43,6 +44,7 @@ export const ProductDetailSheetModal: React.FC<
   allProducts,
   cart,
   settings,
+  currentUser,
   onClose,
   onSelectProduct,
   onAddToCart,
@@ -64,16 +66,13 @@ export const ProductDetailSheetModal: React.FC<
 
   const buildDirectWhatsAppUrl = () => {
     const qty = cartEntry ? cartEntry.quantity : 1;
-    const lines = [
-      `Hello *${settings.businessName || 'SONU DIESEL BHATTI'}*, I want to order:`,
-      `• Product: ${product.name}`,
-      `• Size: ${product.size} (${getDimensionsBySize(product.size)})`,
-      `• Price: ₹${product.price.toLocaleString('en-IN')}`,
-      `• Quantity: ${qty} unit(s)`,
-    ];
-    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-      lines.join('\n')
-    )}`;
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const date = now.toLocaleDateString('en-IN');
+    const customerName = currentUser?.name || 'Customer';
+    const stockMsg = product.stockQuantity <= 0 ? 'Please request an order (Out of Stock)' : 'Do you have this in stock?';
+    const text = `Product: ${product.name}\nCustomer: ${customerName}\nQty: ${qty}\nTime: ${time}\nDate: ${date}\n\n${stockMsg}`;
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
 
   const handlePrev = () => {

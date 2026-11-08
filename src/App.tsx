@@ -183,6 +183,39 @@ function SonuBhattiAppContent() {
   const [viewMode, setViewMode] = useState<
     'public' | 'admin_login' | 'admin_dashboard'
   >('public');
+  const [adminTab, setAdminTab] = useState<'inventory' | 'history' | 'settings'>('inventory');
+  
+  const [viewHistory, setViewHistory] = useState<
+    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'history' | 'settings' }[]
+  >([]);
+
+  const handleNavigate = useCallback(
+    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'history' | 'settings') => {
+      if (newMode === viewMode && (!newTab || newTab === adminTab)) return;
+      
+      setViewHistory((prev) => [...prev, { mode: viewMode, tab: adminTab }]);
+      setViewMode(newMode);
+      if (newTab) setAdminTab(newTab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [viewMode, adminTab]
+  );
+
+  const handleGoBack = useCallback(() => {
+    if (viewHistory.length === 0) {
+      if (viewMode !== 'public') {
+        setViewMode('public');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return;
+    }
+    const last = viewHistory[viewHistory.length - 1];
+    setViewHistory((prev) => prev.slice(0, -1));
+    setViewMode(last.mode);
+    if (last.tab) setAdminTab(last.tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    audioFeedback.play('click');
+  }, [viewHistory, viewMode]);
 
   // Online / Offline Connectivity & Sync Queue
   const [isOnline, setIsOnline] = useState<boolean>(() =>
@@ -617,7 +650,7 @@ function SonuBhattiAppContent() {
     setUserOrders([]);
     localStorage.removeItem(CACHE_KEYS.ADMIN_SESSION);
     localStorage.removeItem('sonu_bhatti_current_user');
-    setViewMode('public');
+    handleNavigate('public');
     showActionFeedback('Signed Out', 'Returned to public workshop catalogue', 'general');
   };
 
@@ -1403,7 +1436,7 @@ function SonuBhattiAppContent() {
           href="#catalogue"
           onClick={(e) => {
             e.preventDefault();
-            setViewMode('public');
+            handleNavigate('public');
           }}
           className="text-xs xs:text-sm sm:text-base md:text-lg font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 whitespace-nowrap shrink-0 font-display truncate max-w-[125px] xs:max-w-[175px] sm:max-w-none transition-colors"
         >
@@ -1416,7 +1449,7 @@ function SonuBhattiAppContent() {
             href="#catalogue"
             onClick={(e) => {
               e.preventDefault();
-              setViewMode('public');
+              handleNavigate('public');
               document
                 .getElementById('catalogue-grid')
                 ?.scrollIntoView({ behavior: 'smooth' });
@@ -1440,11 +1473,11 @@ function SonuBhattiAppContent() {
             onClick={(e) => {
               e.preventDefault();
               if (viewMode === 'public') {
-                setViewMode(
+                handleNavigate(
                   authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
                 );
               } else {
-                setViewMode('public');
+                handleNavigate('public');
               }
             }}
             className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
@@ -1455,6 +1488,22 @@ function SonuBhattiAppContent() {
 
         {/* Zone 3: Sound Toggle, Notifications, Admin Portal & Shopping Cart */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Mobile-only Back Button */}
+          <AnimatePresence>
+            {(viewHistory.length > 0 || viewMode !== 'public') && (
+              <motion.button
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                type="button"
+                onClick={handleGoBack}
+                className="flex md:hidden items-center gap-1 p-1.5 sm:px-2 sm:py-1.5 text-[10px] font-bold rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </motion.button>
+            )}
+          </AnimatePresence>
           {/* Micro-Audio Action Feedback Toggle */}
           <motion.button
             type="button"
@@ -1493,13 +1542,11 @@ function SonuBhattiAppContent() {
 
           <AuthProfileHeader
             admin={currentAdmin}
-            onOpenAdminLogin={() => setViewMode('admin_login')}
+            onOpenAdminLogin={() => handleNavigate('admin_login')}
             onSignOut={handleSignOut}
             isAdminPortalOpen={viewMode === 'admin_dashboard'}
             onToggleAdminPortal={() => {
-              setViewMode((prev) =>
-                prev === 'admin_dashboard' ? 'public' : 'admin_dashboard'
-              );
+              handleNavigate(viewMode === 'admin_dashboard' ? 'public' : 'admin_dashboard');
             }}
           />
 
@@ -1560,11 +1607,11 @@ function SonuBhattiAppContent() {
               type="button"
               onClick={() => {
                 if (viewMode === 'public') {
-                  setViewMode(
+                  handleNavigate(
                     authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
                   );
                 } else {
-                  setViewMode('public');
+                  handleNavigate('public');
                 }
               }}
               className="md:hidden font-bold text-[#00C1FD] hover:underline cursor-pointer whitespace-nowrap shrink-0"
@@ -1608,10 +1655,10 @@ function SonuBhattiAppContent() {
               setAuthToken(token);
               setCurrentAdmin(adm);
               writeCache(CACHE_KEYS.ADMIN_SESSION, { token, admin: adm });
-              setViewMode('admin_dashboard');
+              handleNavigate('admin_dashboard');
               fetchAdminDashboard(token);
             }}
-            onBackToCatalogue={() => setViewMode('public')}
+            onBackToCatalogue={() => handleNavigate('public')}
           />
         )}
 
@@ -1622,6 +1669,8 @@ function SonuBhattiAppContent() {
             products={adminProducts}
             movements={stockMovements}
             settings={settings}
+            activeTab={adminTab}
+            onTabChange={(tab) => handleNavigate('admin_dashboard', tab)}
             authToken={authToken}
             isOnline={isOnline}
             offlineQueue={offlineQueue}
@@ -1637,7 +1686,7 @@ function SonuBhattiAppContent() {
               setAuthToken(null);
               setCurrentAdmin(null);
               localStorage.removeItem(CACHE_KEYS.ADMIN_SESSION);
-              setViewMode('public');
+              handleNavigate('public');
             }}
             onCreateProduct={handleCreateProduct}
             onUpdateProduct={handleUpdateProduct}
@@ -2058,7 +2107,12 @@ function SonuBhattiAppContent() {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const text = `*Inquiry for Sonu Diesel Bhatti*\n\nProduct: *${product.name}*\nSize: ${product.size}\nPrice: ₹${product.price.toLocaleString('en-IN')}\n\nIs this model available for dispatch?`;
+                                    const now = new Date();
+                                    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                                    const date = now.toLocaleDateString('en-IN');
+                                    const customerName = currentUser?.name || 'Customer';
+                                    const stockMsg = product.stockQuantity <= 0 ? 'Please request an order (Out of Stock)' : 'Do you have this in stock?';
+                                    const text = `Product: ${product.name}\nCustomer: ${customerName}\nQty: ${cartEntry.quantity}\nTime: ${time}\nDate: ${date}\n\n${stockMsg}`;
                                     window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                   }}
                                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
@@ -2090,7 +2144,12 @@ function SonuBhattiAppContent() {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const text = `*Inquiry for Sonu Diesel Bhatti*\n\nProduct: *${product.name}*\nSize: ${product.size}\nPrice: ₹${product.price.toLocaleString('en-IN')}\n\nIs this model available for dispatch?`;
+                                    const now = new Date();
+                                    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                                    const date = now.toLocaleDateString('en-IN');
+                                    const customerName = currentUser?.name || 'Customer';
+                                    const stockMsg = product.stockQuantity <= 0 ? 'Please request an order (Out of Stock)' : 'Do you have this in stock?';
+                                    const text = `Product: ${product.name}\nCustomer: ${customerName}\nQty: 1\nTime: ${time}\nDate: ${date}\n\n${stockMsg}`;
                                     window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                   }}
                                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-zinc-200 hover:bg-emerald-50 hover:border-emerald-500 text-emerald-600 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
@@ -2123,6 +2182,7 @@ function SonuBhattiAppContent() {
         allProducts={filteredProducts}
         cart={cart}
         settings={settings}
+        currentUser={currentUser}
         onClose={() => setInspectedProduct(null)}
         onSelectProduct={(p) => setInspectedProduct(p)}
         onAddToCart={addToCart}
@@ -2224,8 +2284,7 @@ function SonuBhattiAppContent() {
           <button
             type="button"
             onClick={() => {
-              setViewMode('public');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              handleNavigate('public');
             }}
             className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
               viewMode === 'public'
@@ -2263,10 +2322,9 @@ function SonuBhattiAppContent() {
           <button
             type="button"
             onClick={() => {
-              setViewMode(
+              handleNavigate(
                 authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
               );
-              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
               viewMode === 'admin_login' || viewMode === 'admin_dashboard'

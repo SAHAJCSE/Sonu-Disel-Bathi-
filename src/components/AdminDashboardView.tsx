@@ -21,6 +21,8 @@ interface AdminDashboardViewProps {
   isOnline: boolean;
   offlineQueue: OfflineAction[];
   isSyncing: boolean;
+  activeTab: 'inventory' | 'history' | 'settings';
+  onTabChange: (tab: 'inventory' | 'history' | 'settings') => void;
   onSyncNow: () => void;
   onLogout: () => void;
   onCreateProduct: (data: {
@@ -76,8 +78,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDeleteProduct,
   onDeleteAll,
   onUpdateSettings,
+  activeTab,
+  onTabChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'inventory' | 'history' | 'settings'>('inventory');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -604,7 +607,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <div className="inline-flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 w-fit transition-colors">
           <button
             type="button"
-            onClick={() => setActiveTab('inventory')}
+            onClick={() => onTabChange('inventory')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'inventory'
                 ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
@@ -615,7 +618,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('history')}
+            onClick={() => onTabChange('history')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'history'
                 ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
@@ -626,7 +629,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('settings')}
+            onClick={() => onTabChange('settings')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'settings'
                 ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'

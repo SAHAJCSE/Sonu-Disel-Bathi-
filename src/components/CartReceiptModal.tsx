@@ -41,6 +41,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
   settings,
   isOnline,
   onStockVerifiedUpdate,
+  currentUser,
 }) => {
   const { t, translateSize } = useTranslation();
   const [receiptNumber, setReceiptNumber] = useState('');
@@ -372,31 +373,24 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
   };
 
   const buildReceiptText = () => {
-    const cleanPhone = adminPhone || '918708381844';
-    const lines: string[] = [
-      `*SONU DIESEL BHATTI*`,
-      `OFFICIAL ORDER REQUEST RECEIPT`,
-      `Receipt No: ${receiptNumber}`,
-      `Date: ${receiptDateTime}`,
-      `WhatsApp Order Desk: +${cleanPhone}`,
-      `----------------------------------------`,
+    const now = new Date();
+    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    const date = now.toLocaleDateString('en-IN');
+    const customerName = currentUser?.name || 'Customer';
+    const hasOutOfStock = cart.some(item => item.product.stockQuantity <= 0);
+    
+    const productNames = cart.map(item => `${item.product.name} (x${item.quantity})`).join(', ');
+    const stockMsg = hasOutOfStock ? 'Please request an order (Some items out of stock)' : 'Do you have these in stock?';
+    
+    const lines = [
+      `Products: ${productNames}`,
+      `Customer: ${customerName}`,
+      `Total Qty: ${totalUnits}`,
+      `Time: ${time}`,
+      `Date: ${date}`,
+      ``,
+      stockMsg
     ];
-
-    cart.forEach(({ product, quantity }, idx) => {
-      const sub = product.price * quantity;
-      lines.push(
-        `${String(idx + 1).padStart(2, '0')}. *${product.name}* (${product.size})`,
-        `   Rs. ${product.price.toLocaleString('en-IN')} x ${quantity} = *Rs. ${sub.toLocaleString('en-IN')}*`
-      );
-    });
-
-    lines.push(
-      `----------------------------------------`,
-      `Total Models Selected: ${cart.length} | Total Units Requested: ${totalUnits}`,
-      `*GRAND TOTAL: Rs. ${grandTotal.toLocaleString('en-IN')}*`,
-      `----------------------------------------`,
-      `Please confirm stock availability and dispatch details.`
-    );
 
     return lines.join('\n');
   };
