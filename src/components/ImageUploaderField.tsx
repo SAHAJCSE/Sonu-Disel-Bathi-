@@ -15,6 +15,7 @@ import {
 import { compressImageFile } from '../utils/imageUtils.ts';
 import { ProductImage } from './ProductImage.tsx';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
+import { ImageCropperModal } from './ImageCropperModal.tsx';
 
 export const STUDIO_PRESET_PHOTOS: Record<string, string> = {
   Small: '/images/bhatti_small_model_1794033585976.jpg',
@@ -42,6 +43,7 @@ export const ImageUploaderField: React.FC<ImageUploaderFieldProps> = ({
   const [compressionStats, setCompressionStats] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [croppingImage, setCroppingImage] = useState<string | null>(null);
 
   // Live Camera Viewfinder State
   const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -76,17 +78,16 @@ export const ImageUploaderField: React.FC<ImageUploaderFieldProps> = ({
     setIsCompressing(true);
     try {
       const originalKb = Math.max(1, Math.round(file.size / 1024));
-      const { dataUrl } = await compressImageFile(file, 960, 0.84);
-      const compressedKb = Math.max(
-        1,
-        Math.round((dataUrl.length * 3) / 4 / 1024)
-      );
-      setCompressionStats(
-        `Optimized HD (${originalKb} KB → ${compressedKb} KB)`
-      );
-      onChange(dataUrl);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (typeof e.target?.result === 'string') {
+          setCompressionStats(`Original Loaded (${originalKb} KB)`);
+          setCroppingImage(e.target.result);
+        }
+      };
+      reader.readAsDataURL(file);
     } catch {
-      setErrorMsg('Failed to process and compress image.');
+      setErrorMsg('Failed to read image.');
     } finally {
       setIsCompressing(false);
     }
@@ -153,10 +154,8 @@ export const ImageUploaderField: React.FC<ImageUploaderFieldProps> = ({
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.drawImage(video, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      const kb = Math.max(1, Math.round((dataUrl.length * 3) / 4 / 1024));
-      setCompressionStats(`Camera Snapshot (${kb} KB)`);
-      onChange(dataUrl);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setCroppingImage(dataUrl);
     }
     stopCameraStream();
   };
@@ -468,6 +467,20 @@ export const ImageUploaderField: React.FC<ImageUploaderFieldProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {croppingImage && (
+        <ImageCropperModal
+          image={croppingImage}
+          onCropComplete={(croppedUrl) => {
+            const kb = Math.max(1, Math.round((croppedUrl.length * 3) / 4 / 1024));
+            setCompressionStats(`Cropped & Optimized (${kb} KB)`);
+            onChange(croppedUrl);
+            setCroppingImage(null);
+          }}
+          onCancel={() => setCroppingImage(null)}
+          aspectRatio={4 / 3}
+        />
       )}
     </div>
   );

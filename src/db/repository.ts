@@ -10,6 +10,7 @@ import {
   stockMovements,
   userFavorites,
   userProfiles,
+  storedImages,
 } from './schema.ts';
 
 export function hashAdminPassword(password: string): string {
@@ -272,7 +273,7 @@ export async function getBusinessSettings() {
       .values({
         businessName: 'SONU DIESEL BHATTI',
         logoUrl: '/icon.svg',
-        whatsappNumber: '919876543210',
+        whatsappNumber: '918708381844',
         defaultLanguage: 'en',
         lowStockThreshold: 10,
       })
@@ -866,4 +867,38 @@ export async function toggleUserFavorite(userUid: string, productId: number) {
     throw new Error('Failed to toggle favorite.', { cause: error });
   }
 }
+
+export async function storeImageBytes(dataBase64: string, filename = 'image.jpg', mimeType = 'image/jpeg') {
+  try {
+    const cleanBase64 = dataBase64.includes('base64,') ? dataBase64.split('base64,')[1] : dataBase64;
+    const sizeBytes = Math.round((cleanBase64.length * 3) / 4);
+    const rows = await db
+      .insert(storedImages)
+      .values({
+        filename,
+        mimeType,
+        dataBase64: cleanBase64,
+        sizeBytes,
+      })
+      .returning();
+    return rows[0];
+  } catch (error: any) {
+    console.error('Database insertion failed in storeImageBytes:', error);
+    throw new Error('Failed to store image in database.', { cause: error });
+  }
+}
+
+export async function getImageById(id: number) {
+  try {
+    const rows = await db
+      .select()
+      .from(storedImages)
+      .where(eq(storedImages.id, id));
+    return rows[0] || null;
+  } catch (error: any) {
+    console.error('Database query failed in getImageById:', error);
+    return null;
+  }
+}
+
 

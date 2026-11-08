@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { Flame } from 'lucide-react';
-import { resolveProductImageUrl } from '../assets/bhattiImages.ts';
+import React, { useState } from 'react';
 
 interface ProductImageProps {
   src: string;
@@ -8,65 +6,49 @@ interface ProductImageProps {
   sizeLabel?: string;
   className?: string;
   enableHoverEffect?: boolean;
+  priority?: boolean;
 }
 
-export const ProductImage: React.FC<ProductImageProps> = React.memo(({
+export const ProductImage: React.FC<ProductImageProps> = ({
   src,
   alt,
   sizeLabel,
-  className = 'w-full h-full object-cover',
+  className = '',
   enableHoverEffect = false,
+  priority = false,
 }) => {
-  const [hasError, setHasError] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
 
-  const resolvedSrc = resolveProductImageUrl(src, sizeLabel);
-
-  useEffect(() => {
-    setHasError(false);
-    setIsLoaded(false);
-  }, [src, sizeLabel]);
-
-  if (!resolvedSrc || hasError) {
+  if (error || !src) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-zinc-200 p-4 text-center ${className}`}
+        className={`flex flex-col items-center justify-center bg-zinc-100 text-zinc-500 p-4 text-center ${className}`}
       >
-        <div className="w-12 h-12 rounded-xl bg-[#00C1FD]/15 border border-[#00C1FD]/30 flex items-center justify-center mb-2 transition-transform duration-200 group-hover:scale-105 shadow-sm">
-          <Flame className="w-6 h-6 text-[#00C1FD]" />
-        </div>
-        <span className="text-xs font-semibold tracking-tight text-white line-clamp-1">
+        <span className="text-[11px] font-mono uppercase tracking-wider line-clamp-2">
           {alt}
         </span>
         {sizeLabel && (
-          <span className="text-[11px] text-zinc-400 mt-0.5">{sizeLabel}</span>
+          <span className="text-[10px] font-mono text-zinc-400 mt-1">{sizeLabel}</span>
         )}
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-zinc-900">
-      {!isLoaded && (
-        <div className="absolute inset-0 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 animate-pulse" />
-      )}
+    <div className={`relative overflow-hidden ${className}`}>
+      {!loaded && <div className="absolute inset-0 bg-zinc-100 animate-pulse" />}
       <img
-        src={resolvedSrc}
+        src={src}
         alt={alt}
-        loading="lazy"
+        loading={priority ? 'eager' : 'lazy'}
         decoding="async"
-        onLoad={() => setIsLoaded(true)}
-        onError={() => setHasError(true)}
-        className={`${className} transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.98]'
-        } ${
-          enableHoverEffect
-            ? 'group-hover:scale-[1.04] group-hover:brightness-[1.03]'
-            : ''
-        }`}
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+        className={`w-full h-full object-contain transition-all duration-200 ${
+          loaded ? 'opacity-100' : 'opacity-0'
+        } ${enableHoverEffect ? 'group-hover:scale-103' : ''}`}
       />
-      {/* Subtle studio inner border & bottom scrim for depth */}
-      <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
     </div>
   );
-});
+};

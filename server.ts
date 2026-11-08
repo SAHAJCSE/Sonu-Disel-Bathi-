@@ -34,6 +34,8 @@ import {
   markAllNotificationsRead,
   getUserFavorites,
   toggleUserFavorite,
+  storeImageBytes,
+  getImageById,
 } from './src/db/repository.ts';
 
 dotenv.config();
@@ -204,6 +206,16 @@ app.get('/api/public/catalogue', async (_req: Request, res: Response) => {
   }
 });
 
+app.get(['/api/products/public', '/api/products'], async (_req: Request, res: Response) => {
+  try {
+    const productsList = await getPublicProducts();
+    res.json(productsList);
+  } catch (error: any) {
+    console.error('Error in GET /api/products/public:', error);
+    res.status(500).json({ error: error.message || 'Failed to load products' });
+  }
+});
+
 // Check live stock availability when generating receipt / WhatsApp request
 app.post('/api/public/verify-cart', async (req: Request, res: Response) => {
   try {
@@ -272,14 +284,41 @@ app.get('/api/auth/admins-public', async (_req: Request, res: Response) => {
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
+    const trimmedPassword = String(password || '').trim();
+
+    // Direct master admin access with password 1234
+    if (trimmedPassword === '1234') {
+      const token = `sdb_sess_1234_${Date.now()}`;
+      let targetAdmin = null;
+      try {
+        const admins = await getAllAdmins();
+        if (admins && admins.length > 0) {
+          targetAdmin = admins[0];
+        }
+      } catch {
+        // Fallback if db offline
+      }
+
+      return res.json({
+        token,
+        admin: {
+          id: targetAdmin?.id || 1,
+          uid: targetAdmin?.uid || 'admin-master-1234',
+          email: targetAdmin?.email || 'admin@sonubhatti.com',
+          name: targetAdmin?.name || 'Administrator (Passcode 1234)',
+          role: 'admin',
+        },
+      });
+    }
+
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Please enter password 1234 to access the Admin Portal.' });
     }
 
     const admin = await loginAdminWithPassword(String(email), String(password));
     if (!admin) {
       return res.status(401).json({
-        error: 'Invalid credentials or unauthorized account. Only the 2 pre-authorized administrators can log in.',
+        error: 'Invalid password. Enter passcode 1234 for direct Admin Portal access.',
       });
     }
 
@@ -623,6 +662,8 @@ app.get('/api/admin/dashboard', requireAdmin, async (req: AuthRequest, res: Resp
   }
 });
 
+const recentProductCreationLocks = new Map<string, { timestamp: number; product: any }>();
+
 app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { name, size, imageUrl, price, stockQuantity, note, clientActionId } = req.body;
@@ -638,9 +679,15 @@ app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Resp
       });
     }
 
+    const dedupeSignature = `${String(name).trim().toLowerCase()}|${String(size).trim().toLowerCase()}|${Number(price)}`;
+    const existingLock = recentProductCreationLocks.get(dedupeSignature);
+    if (existingLock && Date.now() - existingLock.timestamp < 6000) {
+      return res.status(200).json({ product: existingLock.product, deduplicated: true });
+    }
+
     const created = await createProductWithStockLog(
       {
-        name: String(name),
+        name: String(name).trim(),
         size: String(size),
         imageUrl: String(imageUrl),
         price: Number(price),
@@ -649,6 +696,11 @@ app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Resp
       req.admin!.email,
       note ? String(note) : undefined
     );
+
+    recentProductCreationLocks.set(dedupeSignature, {
+      timestamp: Date.now(),
+      product: created,
+    });
 
     if (clientActionId) {
       processedOfflineIds.add(clientActionId);
@@ -1196,6 +1248,40 @@ Instructions:
   } catch (error: any) {
     console.error('Error in POST /api/admin/ai/parse-ocr:', error);
     res.status(500).json({ error: error.message || 'Failed to perform OCR extraction on image' });
+  }
+});
+
+// ============================================================================
+// IMAGE DATABASE STORAGE ENDPOINTS
+// ============================================================================
+app.post('/api/images/upload', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const { dataBase64, filename, mimeType } = req.body;
+    if (!dataBase64) {
+      return res.status(400).json({ error: 'dataBase64 is required' });
+    }
+    const stored = await storeImageBytes(dataBase64, filename || 'product.jpg', mimeType || 'image/jpeg');
+    const imageUrl = `/api/images/${stored.id}`;
+    res.json({ success: true, imageId: stored.id, imageUrl });
+  } catch (error: any) {
+    console.error('Error in POST /api/images/upload:', error);
+    res.status(500).json({ error: error.message || 'Failed to store image in database' });
+  }
+});
+
+app.get('/api/images/:id', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).send('Invalid image ID');
+    const img = await getImageById(id);
+    if (!img) return res.status(404).send('Image not found');
+    const buf = Buffer.from(img.dataBase64, 'base64');
+    res.setHeader('Content-Type', img.mimeType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(buf);
+  } catch (error: any) {
+    console.error('Error in GET /api/images/:id:', error);
+    res.status(500).send('Failed to load image from database');
   }
 });
 

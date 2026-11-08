@@ -43,7 +43,7 @@ export const businessSettings = pgTable('business_settings', {
   id: serial('id').primaryKey(),
   businessName: text('business_name').notNull().default('SONU DIESEL BHATTI'),
   logoUrl: text('logo_url').notNull().default('/icon.svg'),
-  whatsappNumber: text('whatsapp_number').notNull().default('919876543210'),
+  whatsappNumber: text('whatsapp_number').notNull().default('918708381844'),
   defaultLanguage: text('default_language').notNull().default('en'),
   lowStockThreshold: integer('low_stock_threshold').notNull().default(5),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -96,6 +96,15 @@ export const userFavorites = pgTable('user_favorites', {
   productId: integer('product_id')
     .references(() => products.id, { onDelete: 'cascade' })
     .notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const storedImages = pgTable('stored_images', {
+  id: serial('id').primaryKey(),
+  filename: text('filename').notNull().default('image.jpg'),
+  mimeType: text('mime_type').notNull().default('image/jpeg'),
+  dataBase64: text('data_base64').notNull(),
+  sizeBytes: integer('size_bytes').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
