@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'sahajsingh81844@gmail.com' ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Products collection: public read, admin write
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(productId);
+    }
+
+    // Orders collection: customer can create and read their own, admin has full access
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userUid == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(orderId) && (
+        request.resource.data.userUid == request.auth.uid || isAdmin()
+      );
+      allow update, delete: if isAdmin() && isValidId(orderId);
+    }
+
+    // Settings collection: public read, admin write
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidId(settingId);
+    }
+
+    // User profiles: user reads/writes their own profile, admin reads all
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
+    }
+  }
+}

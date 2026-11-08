@@ -1,0 +1,82 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Commercial Sonu Diesel Bhatti unit catalogue item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number", "description": "Numeric product identifier" },
+        "name": { "type": "string", "description": "Product model name" },
+        "size": { "type": "string", "description": "Dimensions or size specification" },
+        "imageUrl": { "type": "string", "description": "Product photograph path or URL" },
+        "price": { "type": "number", "description": "Price in Indian Rupees (INR)" },
+        "stockQuantity": { "type": "number", "description": "Current units available in inventory" },
+        "isActive": { "type": "boolean", "description": "Visibility flag in public catalogue" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "size", "imageUrl", "price", "stockQuantity", "isActive"]
+    },
+    "CustomerOrder": {
+      "title": "CustomerOrder",
+      "description": "WhatsApp or portal generated order for Diesel Bhatti equipment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Order reference identifier" },
+        "userUid": { "type": "string", "description": "Firebase user UID" },
+        "customerName": { "type": "string", "description": "Full name of purchasing customer" },
+        "customerPhone": { "type": "string", "description": "10-digit mobile contact number" },
+        "totalAmount": { "type": "number", "description": "Total order amount in INR" },
+        "status": { "type": "string", "enum": ["PENDING", "CONFIRMED", "PROCESSING", "DISPATCHED", "DELIVERED", "CANCELLED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userUid", "customerName", "customerPhone", "totalAmount", "status", "createdAt"]
+    },
+    "BusinessSettings": {
+      "title": "BusinessSettings",
+      "description": "Contact, WhatsApp dispatch and inventory configuration",
+      "type": "object",
+      "properties": {
+        "whatsappNumber": { "type": "string", "description": "WhatsApp dispatch contact phone" },
+        "businessName": { "type": "string", "description": "Business trading name" },
+        "address": { "type": "string", "description": "Physical workshop address" },
+        "contactPhone": { "type": "string", "description": "Support mobile phone" },
+        "allowCustomerOrders": { "type": "boolean", "description": "Toggle to accept web orders" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["whatsappNumber", "businessName", "contactPhone"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Registered customer or administrator profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string", "description": "Display name" },
+        "photoUrl": { "type": "string", "description": "Avatar URL" },
+        "role": { "type": "string", "enum": ["admin", "customer", "staff"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Industrial product catalogue items"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/CustomerOrder" },
+      "description": "Customer purchase orders and inquiries"
+    },
+    "/settings/{settingsId}": {
+      "schema": { "$ref": "#/entities/BusinessSettings" },
+      "description": "Global business configuration parameters"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profiles"
+    }
+  }
+}

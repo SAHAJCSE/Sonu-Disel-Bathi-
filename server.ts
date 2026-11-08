@@ -1009,7 +1009,7 @@ app.post('/api/admin/ai/parse-voice', requireAdmin, async (req: AuthRequest, res
         }));
 
         const geminiCall = ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.8-flash',
           contents: `Parse this administrator voice command (spoken in English, Hindi, or Punjabi, language hint: ${
             language || 'auto'
           }) for "Sonu Diesel Bhatti" inventory management.
@@ -1076,7 +1076,7 @@ Rules:
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI parse timeout')), 4000)
+          setTimeout(() => reject(new Error('AI parse timeout')), 8000)
         );
 
         const response: any = await Promise.race([geminiCall, timeoutPromise]);
