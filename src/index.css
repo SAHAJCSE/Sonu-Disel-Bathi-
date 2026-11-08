@@ -1,16 +1,23 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+
 @layer base {
   :root {
     --font-display: 'Outfit', sans-serif;
     --font-sans: 'Plus Jakarta Sans', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    color-scheme: light;
+  }
+
+  :root.dark {
+    color-scheme: dark;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #FAFAF9;
-    color: #18181B;
+    @apply bg-stone-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50 transition-colors duration-300;
   }
 
   h1, h2, h3, .font-display {

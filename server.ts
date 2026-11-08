@@ -16,6 +16,7 @@ import {
   updateProductDetails,
   adjustProductStockTransaction,
   deleteProductSafely,
+  deleteAllProducts,
   getAllAdmins,
   loginAdminWithPassword,
   clearAdminSession,
@@ -808,6 +809,22 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req: AuthRequest, res
   } catch (error: any) {
     console.error('Error in DELETE /api/admin/products/:id:', error);
     res.status(400).json({ error: error.message || 'Failed to delete product' });
+  }
+});
+
+app.delete('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await deleteAllProducts();
+
+    broadcastRealtimeEvent('catalogue_cleared', {
+      adminEmail: req.admin!.email,
+      deletedCount: result.deletedCount,
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error in DELETE /api/admin/products:', error);
+    res.status(500).json({ error: error.message || 'Failed to clear catalogue' });
   }
 });
 

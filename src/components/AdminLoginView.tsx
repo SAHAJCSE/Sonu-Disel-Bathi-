@@ -49,27 +49,27 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
   };
 
   return (
-    <div className="max-w-sm mx-auto my-12 px-4 font-sans">
+    <div className="max-w-sm mx-auto my-12 px-4 font-sans transition-colors">
       <button
         type="button"
         onClick={onBackToCatalogue}
-        className="text-xs font-medium text-zinc-500 hover:text-zinc-950 mb-4 cursor-pointer transition-colors"
+        className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 mb-4 cursor-pointer transition-colors"
       >
         ← Back to Storefront
       </button>
 
-      <div className="rounded-lg bg-white border border-zinc-200 p-6 shadow-xs text-zinc-950">
+      <div className="rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 shadow-xs text-zinc-950 dark:text-zinc-50 transition-colors">
         <div className="mb-5">
-          <h1 className="text-lg font-bold tracking-tight text-zinc-950">
+          <h1 className="text-lg font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
             Admin Portal
           </h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
             Enter passcode to manage inventory and prices.
           </p>
         </div>
 
         {errorMsg && (
-          <div className="mb-4 p-3 rounded-md bg-zinc-100 border border-zinc-950 text-xs text-zinc-950">
+          <div className="mb-4 p-3 rounded-md bg-zinc-100 dark:bg-zinc-800 border border-zinc-950 dark:border-zinc-700 text-xs text-zinc-950 dark:text-zinc-200 transition-colors">
             {errorMsg}
           </div>
         )}
@@ -77,7 +77,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
         <form onSubmit={handlePasswordLogin} className="space-y-4">
           <div>
             <div className="flex items-center justify-between text-xs mb-1.5">
-              <label className="font-medium text-zinc-700">Passcode</label>
+              <label className="font-medium text-zinc-700 dark:text-zinc-300">Passcode</label>
             </div>
             <input
               type="password"
@@ -85,7 +85,7 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••"
-              className="w-full px-3 py-2.5 text-sm font-mono tracking-wider rounded-md bg-white border border-zinc-300 text-zinc-950 focus:outline-none focus:border-zinc-950"
+              className="w-full px-3 py-2.5 text-sm font-mono tracking-wider rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
             />
           </div>
 

@@ -50,6 +50,7 @@ interface AdminDashboardViewProps {
     note?: string
   ) => Promise<void>;
   onDeleteProduct: (productId: number) => Promise<void>;
+  onDeleteAll: () => Promise<void>;
   onUpdateSettings: (data: Partial<BusinessSettings>) => Promise<void>;
   onUpdateAdminProfile: (
     adminId: number,
@@ -73,6 +74,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onUpdateProduct,
   onAdjustStock,
   onDeleteProduct,
+  onDeleteAll,
   onUpdateSettings,
 }) => {
   const [activeTab, setActiveTab] = useState<'inventory' | 'history' | 'settings'>('inventory');
@@ -457,19 +459,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const totalValue = products.reduce((sum, p) => sum + p.price * (p.stockQuantity || 0), 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans text-zinc-950">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans text-zinc-950 dark:text-zinc-50 transition-colors">
       {/* Top Header & PDF Export Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-950">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
               Admin Dashboard
             </h1>
-            <span className="text-xs font-mono px-2 py-0.5 rounded border border-zinc-300 bg-zinc-50 text-zinc-700">
+            <span className="text-xs font-mono px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
               {currentAdmin.name}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 mt-0.5">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
             Inventory, pricing, and stock movement records
           </p>
         </div>
@@ -478,14 +480,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <button
             type="button"
             onClick={handleExportInventoryPdf}
-            className="px-3 py-1.5 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium transition-colors cursor-pointer"
           >
             Export Inventory PDF
           </button>
           <button
             type="button"
             onClick={handleExportMovementsPdf}
-            className="px-3 py-1.5 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium transition-colors cursor-pointer"
           >
             Export History PDF
           </button>
@@ -494,7 +496,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               type="button"
               onClick={onSyncNow}
               disabled={isSyncing}
-              className="px-3 py-1.5 rounded-md border border-zinc-950 bg-zinc-100 text-zinc-950 text-xs font-medium cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-zinc-950 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium cursor-pointer"
             >
               {isSyncing ? 'Syncing...' : `Sync (${offlineQueue.length})`}
             </button>
@@ -518,8 +520,21 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={async () => {
+              if (window.confirm('WARNING: This will permanently delete ALL products and stock history from the catalogue. Are you absolutely sure?')) {
+                audioFeedback.play('delete');
+                showTempMessage('Clearing entire catalogue...');
+                await onDeleteAll();
+              }
+            }}
+            className="px-3 py-1.5 rounded-md border border-red-300 dark:border-red-900 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 text-xs font-medium transition-colors cursor-pointer"
+          >
+            Delete All
+          </button>
+          <button
+            type="button"
             onClick={onLogout}
-            className="px-3 py-1.5 rounded-md border border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-600 hover:text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-50 text-xs font-medium transition-colors cursor-pointer"
           >
             Log Out
           </button>
@@ -541,59 +556,59 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* KPI Summary Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white border border-zinc-200 rounded-md p-4">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Total Units
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 mt-1">
+          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {totalUnits}
           </div>
-          <span className="text-[11px] text-zinc-500">{products.length} Models</span>
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{products.length} Models</span>
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-md p-4">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Inventory Value
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 mt-1">
+          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             ₹{totalValue.toLocaleString('en-IN')}
           </div>
-          <span className="text-[11px] text-zinc-500">Total stock worth</span>
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Total stock worth</span>
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-md p-4">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Low Stock
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 mt-1">
+          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {lowStockCount}
           </div>
-          <span className="text-[11px] text-zinc-500">
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
             Threshold ≤ {settings.lowStockThreshold || 10}
           </span>
         </div>
 
-        <div className="bg-white border border-zinc-200 rounded-md p-4">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Out of Stock
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 mt-1">
+          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {outOfStockCount}
           </div>
-          <span className="text-[11px] text-zinc-500">Zero quantity</span>
+          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Zero quantity</span>
         </div>
       </div>
 
       {/* Navigation Tabs & Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="inline-flex bg-zinc-100 p-1 rounded-md border border-zinc-200 w-fit">
+        <div className="inline-flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 w-fit transition-colors">
           <button
             type="button"
             onClick={() => setActiveTab('inventory')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'inventory'
-                ? 'bg-zinc-950 text-white'
-                : 'text-zinc-600 hover:text-zinc-950'
+                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
             }`}
           >
             Inventory ({products.length})
@@ -603,8 +618,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             onClick={() => setActiveTab('history')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-zinc-950 text-white'
-                : 'text-zinc-600 hover:text-zinc-950'
+                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
             }`}
           >
             Stock History ({movements.length})
@@ -614,8 +629,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             onClick={() => setActiveTab('settings')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-zinc-950 text-white'
-                : 'text-zinc-600 hover:text-zinc-950'
+                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
             }`}
           >
             Settings
@@ -629,7 +644,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Filter models..."
-              className="w-full sm:w-64 px-3 py-1.5 rounded-md border border-zinc-300 bg-white text-xs text-zinc-950 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-950"
+              className="w-full sm:w-64 px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-50 transition-colors"
             />
             <button
               type="button"
@@ -654,11 +669,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Tab Content */}
       {activeTab === 'inventory' && (
-        <div className="bg-white border border-zinc-200 rounded-md overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden transition-colors">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-zinc-200 text-[11px] font-mono uppercase text-zinc-500 bg-zinc-50">
+                <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/50">
                   <th className="py-3 px-4">Product</th>
                   <th className="py-3 px-4">Size</th>
                   <th className="py-3 px-4">Price</th>
@@ -667,14 +682,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 text-xs sm:text-sm">
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs sm:text-sm">
                 {filteredProducts.map((product) => {
                   const out = product.stockQuantity <= 0;
                   return (
-                    <tr key={product.id} className="hover:bg-zinc-50 transition-colors">
+                    <tr key={product.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded bg-zinc-100 border border-zinc-200 overflow-hidden shrink-0">
+                          <div className="w-10 h-10 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0">
                             <ProductImage
                               src={product.imageUrl}
                               alt={product.name}
@@ -682,27 +697,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             />
                           </div>
                           <div>
-                            <div className="font-semibold text-zinc-950 text-xs sm:text-sm">
+                            <div className="font-semibold text-zinc-950 dark:text-zinc-50 text-xs sm:text-sm">
                               {product.name}
                             </div>
-                            <div className="text-[11px] font-mono text-zinc-500">
+                            <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
                               #SDB-{String(product.id).padStart(2, '0')}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs text-zinc-700">
+                      <td className="py-3 px-4 font-mono text-xs text-zinc-700 dark:text-zinc-300">
                         {product.size}
                       </td>
-                      <td className="py-3 px-4 font-mono text-xs font-bold text-zinc-950">
+                      <td className="py-3 px-4 font-mono text-xs font-bold text-zinc-950 dark:text-zinc-50">
                         ₹{product.price.toLocaleString('en-IN')}
                       </td>
                       <td className="py-3 px-4">
                         <span
                           className={`inline-block px-2 py-0.5 rounded font-mono text-xs font-medium border ${
                             out
-                              ? 'bg-zinc-100 text-zinc-400 border-zinc-300 line-through'
-                              : 'bg-white text-zinc-950 border-zinc-950'
+                              ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-300 dark:border-zinc-700 line-through'
+                              : 'bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 border-zinc-950 dark:border-zinc-100'
                           }`}
                         >
                           {product.stockQuantity} units
@@ -716,7 +731,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             onClick={() =>
                               onAdjustStock(product.id, 'REMOVE', 1, 'Quick -1')
                             }
-                            className="px-2 py-1 rounded border border-zinc-300 hover:bg-zinc-100 font-mono text-xs disabled:opacity-40 cursor-pointer"
+                            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 font-mono text-xs text-zinc-950 dark:text-zinc-50 disabled:opacity-40 cursor-pointer transition-colors"
                           >
                             -1
                           </button>
@@ -725,7 +740,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             onClick={() =>
                               onAdjustStock(product.id, 'ADD', 1, 'Quick +1')
                             }
-                            className="px-2 py-1 rounded border border-zinc-300 hover:bg-zinc-100 font-mono text-xs cursor-pointer"
+                            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 font-mono text-xs text-zinc-950 dark:text-zinc-50 cursor-pointer transition-colors"
                           >
                             +1
                           </button>
@@ -734,7 +749,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             onClick={() =>
                               onAdjustStock(product.id, 'ADD', 5, 'Quick +5')
                             }
-                            className="px-2 py-1 rounded border border-zinc-300 hover:bg-zinc-100 font-mono text-xs cursor-pointer"
+                            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 font-mono text-xs text-zinc-950 dark:text-zinc-50 cursor-pointer transition-colors"
                           >
                             +5
                           </button>
@@ -745,7 +760,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               setStockAmount(String(product.stockQuantity));
                               setStockNote('');
                             }}
-                            className="px-2 py-1 rounded border border-zinc-300 hover:bg-zinc-100 font-mono text-xs text-zinc-600 cursor-pointer"
+                            className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 font-mono text-xs text-zinc-600 dark:text-zinc-400 cursor-pointer transition-colors"
                           >
                             Set
                           </button>
@@ -759,14 +774,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               setIsCreating(false);
                               setEditingProduct({ ...product });
                             }}
-                            className="px-2.5 py-1 rounded border border-zinc-300 hover:bg-zinc-100 text-xs font-medium cursor-pointer"
+                            className="px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-950 dark:text-zinc-50 cursor-pointer transition-colors"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => onDeleteProduct(product.id)}
-                            className="px-2.5 py-1 rounded border border-zinc-300 hover:bg-zinc-950 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+                            className="px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-950 dark:hover:bg-zinc-50 hover:text-white dark:hover:text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
                           >
                             Delete
                           </button>
@@ -782,16 +797,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {activeTab === 'history' && (
-        <div className="bg-white border border-zinc-200 rounded-md overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden transition-colors">
           {movements.length === 0 ? (
-            <div className="p-12 text-center text-xs font-mono text-zinc-500">
+            <div className="p-12 text-center text-xs font-mono text-zinc-500 dark:text-zinc-400">
               No stock movements recorded yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-zinc-200 text-[11px] font-mono uppercase text-zinc-500 bg-zinc-50">
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/50">
                     <th className="py-3 px-4">Date & Time</th>
                     <th className="py-3 px-4">Product</th>
                     <th className="py-3 px-4">Action</th>
@@ -799,12 +814,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <th className="py-3 px-4">Note</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 text-xs">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
                   {movements.map((m) => {
                     const delta = m.newQuantity - m.previousQuantity;
                     return (
-                      <tr key={m.id} className="hover:bg-zinc-50">
-                        <td className="py-3 px-4 font-mono text-zinc-500">
+                      <tr key={m.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        <td className="py-3 px-4 font-mono text-zinc-500 dark:text-zinc-400">
                           {new Date(m.createdAt).toLocaleString('en-IN', {
                             day: '2-digit',
                             month: 'short',
@@ -812,23 +827,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                             minute: '2-digit',
                           })}
                         </td>
-                        <td className="py-3 px-4 font-semibold text-zinc-950">
+                        <td className="py-3 px-4 font-semibold text-zinc-950 dark:text-zinc-50">
                           {m.productName}{' '}
-                          <span className="font-mono font-normal text-zinc-500">
+                          <span className="font-mono font-normal text-zinc-500 dark:text-zinc-400">
                             ({m.productSize})
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono uppercase text-zinc-700">
+                        <td className="py-3 px-4 font-mono uppercase text-zinc-700 dark:text-zinc-300">
                           {m.actionType}
                         </td>
                         <td className="py-3 px-4 font-mono">
-                          <span className="text-zinc-500">{m.previousQuantity} → </span>
-                          <strong className="text-zinc-950">{m.newQuantity}</strong>{' '}
-                          <span className="text-zinc-600">
+                          <span className="text-zinc-500 dark:text-zinc-400">{m.previousQuantity} → </span>
+                          <strong className="text-zinc-950 dark:text-zinc-50">{m.newQuantity}</strong>{' '}
+                          <span className="text-zinc-600 dark:text-zinc-300">
                             ({delta > 0 ? `+${delta}` : delta})
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-zinc-600">{m.note || '-'}</td>
+                        <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400">{m.note || '-'}</td>
                       </tr>
                     );
                   })}
@@ -842,9 +857,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       {activeTab === 'settings' && (
         <form
           onSubmit={handleSaveSettings}
-          className="bg-white border border-zinc-200 rounded-md p-6 max-w-lg space-y-4"
+          className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-6 max-w-lg space-y-4 transition-colors"
         >
-          <h2 className="text-sm font-bold text-zinc-950">Workshop Settings</h2>
+          <h2 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Workshop Settings</h2>
 
           <div>
             <label className="block text-xs font-mono uppercase text-zinc-600 mb-1">
@@ -855,7 +870,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               required
               value={businessNameInput}
               onChange={(e) => setBusinessNameInput(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs text-zinc-950 focus:outline-none focus:border-zinc-950"
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
             />
           </div>
 
@@ -868,7 +883,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               required
               value={whatsappInput}
               onChange={(e) => setWhatsappInput(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs font-mono text-zinc-950 focus:outline-none focus:border-zinc-950"
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-xs font-mono bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
             />
           </div>
 
@@ -882,7 +897,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               required
               value={thresholdInput}
               onChange={(e) => setThresholdInput(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs font-mono text-zinc-950 focus:outline-none focus:border-zinc-950"
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-xs font-mono bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
             />
           </div>
 
@@ -897,19 +912,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Set Exact Stock Modal */}
       {stockModalProduct && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white border border-zinc-300 rounded-md max-w-md w-full p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 transition-colors">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-md max-w-md w-full p-6 shadow-xl transition-colors">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-zinc-950">Set Stock Count</h3>
+              <h3 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">Set Stock Count</h3>
               <button
                 type="button"
                 onClick={() => setStockModalProduct(null)}
-                className="text-xs font-mono text-zinc-500 hover:text-zinc-950 cursor-pointer"
+                className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 cursor-pointer transition-colors"
               >
                 Close
               </button>
             </div>
-            <p className="text-xs text-zinc-600 mb-4">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
               {stockModalProduct.name} ({stockModalProduct.size})
             </p>
             <form onSubmit={handleSetStockSubmit} className="space-y-4">
@@ -923,7 +938,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   required
                   value={stockAmount}
                   onChange={(e) => setStockAmount(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md border border-zinc-300 font-mono text-sm text-zinc-950"
+                  className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 font-mono text-sm text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                 />
               </div>
               <div>
@@ -935,14 +950,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   value={stockNote}
                   onChange={(e) => setStockNote(e.target.value)}
                   placeholder="Optional stock audit note"
-                  className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs text-zinc-950"
+                  className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                 />
               </div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setStockModalProduct(null)}
-                  className="px-3 py-1.5 rounded-md border border-zinc-300 text-xs font-medium cursor-pointer"
+                  className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-950 dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
@@ -960,16 +975,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* Create / Edit Product Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-zinc-300 rounded-md max-w-lg w-full p-6 shadow-xl my-8">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto transition-colors">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-md max-w-lg w-full p-6 shadow-xl my-8 transition-colors">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-zinc-950">
+              <h3 className="text-sm font-bold text-zinc-950 dark:text-zinc-50">
                 {isCreating ? 'Add Product' : `Edit ${editingProduct.name}`}
               </h3>
               <button
                 type="button"
                 onClick={() => setEditingProduct(null)}
-                className="text-xs font-mono text-zinc-500 hover:text-zinc-950 cursor-pointer"
+                className="text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-100 cursor-pointer transition-colors"
               >
                 Close
               </button>
@@ -988,7 +1003,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     onChange={(e) =>
                       setEditingProduct({ ...editingProduct, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs text-zinc-950"
+                    className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                   />
                 </div>
                 <div>
@@ -1000,7 +1015,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     onChange={(e) =>
                       setEditingProduct({ ...editingProduct, size: e.target.value })
                     }
-                    className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs bg-white text-zinc-950"
+                    className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 text-xs bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                   >
                     <option value="Small">Small</option>
                     <option value="Medium">Medium</option>
@@ -1026,7 +1041,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         price: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs font-mono text-zinc-950"
+                    className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-mono text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                   />
                 </div>
                 <div>
@@ -1044,17 +1059,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         stockQuantity: Number(e.target.value),
                       })
                     }
-                    className="w-full px-3 py-2 rounded-md border border-zinc-300 text-xs font-mono text-zinc-950"
+                    className="w-full px-3 py-2 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-mono text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono uppercase text-zinc-500 mb-1">
+                <label className="block text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 mb-1">
                   Product Image
                 </label>
-                <div className="flex items-center gap-3 p-3 rounded-md border border-zinc-200 bg-zinc-50">
-                  <div className="w-14 h-14 rounded bg-white border border-zinc-200 overflow-hidden shrink-0">
+                <div className="flex items-center gap-3 p-3 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950/50">
+                  <div className="w-14 h-14 rounded bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 overflow-hidden shrink-0">
                     <ProductImage
                       src={
                         editingProduct.imageUrl ||
@@ -1095,17 +1110,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         })
                       }
                       placeholder="Or paste image URL..."
-                      className="w-full px-2.5 py-1 rounded border border-zinc-300 bg-white text-xs font-mono"
+                      className="w-full px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs font-mono text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200">
+              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-700">
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-3.5 py-1.5 rounded-md border border-zinc-300 text-xs font-medium cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-950 dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>

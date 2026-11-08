@@ -417,23 +417,23 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: '100%', opacity: 0 }}
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed inset-0 z-50 flex flex-col bg-white text-black no-print overflow-hidden font-sans"
+          className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-950 text-black dark:text-zinc-50 no-print overflow-hidden font-sans transition-colors"
         >
           {/* Top Navigation Bar (White Background, Black Text) */}
-          <header className="flex items-center justify-between gap-3 px-4 sm:px-8 py-3.5 bg-white border-b border-zinc-200 shrink-0">
+          <header className="flex items-center justify-between gap-3 px-4 sm:px-8 py-3.5 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0 transition-colors">
             <div className="flex items-center gap-3 min-w-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl bg-white text-black hover:bg-zinc-100 border border-zinc-300 transition-colors cursor-pointer shrink-0"
+                className="p-2 rounded-xl bg-white dark:bg-zinc-900 text-black dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 transition-colors cursor-pointer shrink-0"
                 title="Back to Catalogue"
               >
-                <ArrowLeft className="w-4 h-4 text-black" />
+                <ArrowLeft className="w-4 h-4 text-black dark:text-zinc-50" />
               </button>
               <div className="min-w-0">
-                <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-black truncate flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-black dark:text-zinc-50 truncate flex items-center gap-2">
                   <span>{t('cartTitle')}</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-black border border-zinc-300 font-mono text-xs font-bold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 font-mono text-xs font-bold transition-colors">
                     {cart.length} {cart.length === 1 ? 'Item' : 'Items'} ({totalUnits} Qty)
                   </span>
                 </h2>
@@ -445,9 +445,9 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                 <button
                   type="button"
                   onClick={onClearCart}
-                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-black hover:bg-zinc-100 border border-zinc-300 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-black dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-black" />
+                  <Trash2 className="w-3.5 h-3.5 text-black dark:text-zinc-50" />
                   <span className="hidden sm:inline">Clear</span>
                 </button>
               )}
@@ -462,14 +462,14 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
           </header>
 
           {/* Main Scrollable Content (Pure White Major Background, Black Text) */}
-          <div className="flex-1 overflow-y-auto bg-white">
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950 transition-colors">
             {cart.length === 0 ? (
-              <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center bg-white text-black">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-100 border border-zinc-300 flex items-center justify-center mb-4">
-                  <ShoppingBag className="w-8 h-8 text-black" />
+              <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center bg-white dark:bg-zinc-950 text-black dark:text-zinc-50 transition-colors">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 flex items-center justify-center mb-4 transition-colors">
+                  <ShoppingBag className="w-8 h-8 text-black dark:text-zinc-50" />
                 </div>
-                <h3 className="text-xl font-extrabold text-black">{t('emptyCartTitle')}</h3>
-                <p className="text-sm text-zinc-600 mt-1 max-w-md">{t('emptyCartDesc')}</p>
+                <h3 className="text-xl font-extrabold text-black dark:text-zinc-50">{t('emptyCartTitle')}</h3>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-md">{t('emptyCartDesc')}</p>
                 <button
                   type="button"
                   onClick={onClose}
@@ -481,26 +481,26 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
             ) : (
               <div className="max-w-5xl mx-auto px-4 sm:px-8 py-6 space-y-8 pb-28">
                 {isVerifying && (
-                  <div className="p-3 rounded-xl bg-zinc-50 text-xs text-black border border-zinc-200 flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-black animate-ping" />
+                  <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 text-xs text-black dark:text-zinc-50 border border-zinc-200 dark:border-zinc-800 flex items-center gap-2 transition-colors">
+                    <div className="w-2 h-2 rounded-full bg-black dark:bg-zinc-50 animate-ping" />
                     <span>Verifying workshop stock...</span>
                   </div>
                 )}
 
                 {!isVerifying && stockVerifiedMessage && stockIssues.length > 0 && (
-                  <div className="p-3 rounded-xl text-xs font-semibold border border-zinc-300 bg-zinc-50 text-black flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-black shrink-0" />
+                  <div className="p-3 rounded-xl text-xs font-semibold border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-black dark:text-zinc-50 flex items-center gap-2 transition-colors">
+                    <AlertTriangle className="w-4 h-4 text-black dark:text-zinc-50 shrink-0" />
                     <span>{stockVerifiedMessage}</span>
                   </div>
                 )}
 
                 {/* SECTION 1: Properly Sized Items List (Name, Size, Price × Quantity) */}
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-200 pb-3">
-                    <h3 className="text-base sm:text-lg font-extrabold text-black tracking-tight">
+                  <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3 transition-colors">
+                    <h3 className="text-base sm:text-lg font-extrabold text-black dark:text-zinc-50 tracking-tight">
                       Selected Items ({cart.length})
                     </h3>
-                    <span className="font-mono text-base sm:text-lg font-extrabold text-black">
+                    <span className="font-mono text-base sm:text-lg font-extrabold text-black dark:text-zinc-50">
                       Total: Rs. {grandTotal.toLocaleString('en-IN')}
                     </span>
                   </div>
@@ -511,7 +511,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                       return (
                         <div
                           key={product.id}
-                          className="p-4 sm:p-5 rounded-2xl bg-white border border-zinc-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs"
+                          className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs transition-colors"
                         >
                           <div className="flex items-center gap-4 min-w-0 flex-1">
                             <span className="font-mono text-xs font-bold text-zinc-500 w-6 shrink-0">
@@ -538,7 +538,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                                 {product.name}
                               </h4>
 
-                              <div className="text-sm sm:text-base font-mono font-bold text-black">
+                              <div className="text-sm sm:text-base font-mono font-bold text-black dark:text-zinc-50 transition-colors">
                                 Rs. {product.price.toLocaleString('en-IN')} × {quantity}{' '}
                                 <span className="font-extrabold">
                                   = Rs. {subtotal.toLocaleString('en-IN')}
@@ -548,17 +548,17 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                           </div>
 
                           {/* Quantity Stepper & Remove */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 shrink-0">
-                            <div className="inline-flex items-center gap-2 p-1 rounded-xl bg-zinc-100 border border-zinc-300">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800 shrink-0 transition-colors">
+                            <div className="inline-flex items-center gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 transition-colors">
                               <button
                                 type="button"
                                 onClick={() => onUpdateQty(product.id, quantity - 1)}
                                 aria-label="Decrease quantity"
-                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white hover:bg-zinc-200 text-black border border-zinc-300 flex items-center justify-center cursor-pointer font-bold active:scale-95"
+                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 flex items-center justify-center cursor-pointer font-bold active:scale-95 transition-colors"
                               >
-                                <Minus className="w-4 h-4 text-black" />
+                                <Minus className="w-4 h-4 text-black dark:text-zinc-50" />
                               </button>
-                              <span className="w-8 text-center font-mono font-extrabold text-sm sm:text-base text-black">
+                              <span className="w-8 text-center font-mono font-extrabold text-sm sm:text-base text-black dark:text-zinc-50">
                                 {quantity}
                               </span>
                               <button
@@ -576,9 +576,9 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                               type="button"
                               onClick={() => onRemoveItem(product.id)}
                               aria-label="Remove item"
-                              className="p-2 rounded-xl border border-zinc-300 bg-white hover:bg-zinc-100 text-black cursor-pointer"
+                              className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-black dark:text-zinc-50 cursor-pointer transition-colors"
                             >
-                              <Trash2 className="w-4 h-4 text-black" />
+                              <Trash2 className="w-4 h-4 text-black dark:text-zinc-50" />
                             </button>
                           </div>
                         </div>
@@ -588,12 +588,12 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                 </section>
 
                 {/* SECTION 2: Modern Action Bar (Share to WhatsApp & Download Receipt PDF) */}
-                <section className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-black flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <section className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-zinc-900 border-2 border-black dark:border-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 transition-colors">
                   <div className="space-y-0.5">
-                    <div className="text-xs font-bold uppercase tracking-wider text-zinc-600">
+                    <div className="text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                       Ready to Order / Download
                     </div>
-                    <div className="text-base sm:text-lg font-extrabold text-black font-mono">
+                    <div className="text-base sm:text-lg font-extrabold text-black dark:text-zinc-50 font-mono transition-colors">
                       Grand Total: Rs. {grandTotal.toLocaleString('en-IN')} ({totalUnits} Units)
                     </div>
                   </div>
@@ -603,16 +603,16 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                       type="button"
                       onClick={handleDownloadPdf}
                       disabled={isGeneratingPdf}
-                      className="px-5 py-3 rounded-xl bg-white hover:bg-zinc-100 text-black border-2 border-black font-extrabold text-xs sm:text-sm inline-flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
+                      className="px-5 py-3 rounded-xl bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-black dark:text-zinc-50 border-2 border-black dark:border-white font-extrabold text-xs sm:text-sm inline-flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
                     >
                       {pdfDownloaded ? (
                         <>
-                          <CheckCircle2 className="w-4 h-4 text-black" />
+                          <CheckCircle2 className="w-4 h-4 text-black dark:text-zinc-50" />
                           <span>Receipt PDF Downloaded</span>
                         </>
                       ) : (
                         <>
-                          <Download className="w-4 h-4 text-black" />
+                          <Download className="w-4 h-4 text-black dark:text-zinc-50" />
                           <span>Download Receipt PDF</span>
                         </>
                       )}
@@ -637,7 +637,7 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                     <span>Official Order Request Receipt Preview</span>
                   </div>
 
-                  <div className="bg-white border border-zinc-300 rounded-2xl p-4 sm:p-8 shadow-xs space-y-6">
+                  <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-2xl p-4 sm:p-8 shadow-xs space-y-6 transition-colors">
                     {/* Receipt Top Dark Banner with Cyan Accent Strip (Matching Attached PDF) */}
                     <div className="rounded-xl overflow-hidden bg-[#0F0F12] text-white">
                       <div className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

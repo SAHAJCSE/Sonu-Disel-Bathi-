@@ -128,10 +128,10 @@ export const ProductDetailSheetModal: React.FC<
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.15 }}
-        className="fixed inset-0 z-50 flex flex-col bg-white text-zinc-950 overflow-hidden font-sans"
+        className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-50 overflow-hidden font-sans transition-colors"
       >
         {/* Minimal Vercel-Style Top Bar */}
-        <header className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white border-b border-zinc-200 shrink-0">
+        <header className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 shrink-0 transition-colors">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -139,7 +139,7 @@ export const ProductDetailSheetModal: React.FC<
                 setZoomLevel(1);
                 onClose();
               }}
-              className="px-3 py-1.5 rounded-md border border-zinc-300 hover:bg-zinc-100 text-xs font-medium text-zinc-950 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-medium text-zinc-950 dark:text-zinc-50 transition-colors cursor-pointer"
             >
               ← Back
             </button>
@@ -158,14 +158,14 @@ export const ProductDetailSheetModal: React.FC<
                 <button
                   type="button"
                   onClick={handlePrev}
-                  className="px-2.5 py-1.5 rounded-md border border-zinc-300 hover:bg-zinc-100 text-xs font-mono text-zinc-900 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-mono text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer"
                 >
                   Prev
                 </button>
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="px-2.5 py-1.5 rounded-md border border-zinc-300 hover:bg-zinc-100 text-xs font-mono text-zinc-900 cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-mono text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer"
                 >
                   Next
                 </button>
@@ -179,7 +179,7 @@ export const ProductDetailSheetModal: React.FC<
                   prev === 1 ? 1.75 : prev === 1.75 ? 2.5 : 1
                 )
               }
-              className="px-3 py-1.5 rounded-md border border-zinc-300 hover:bg-zinc-100 text-xs font-mono text-zinc-900 cursor-pointer"
+              className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-mono text-zinc-900 dark:text-zinc-200 transition-colors cursor-pointer"
             >
               Zoom {zoomLevel}x
             </button>
@@ -187,11 +187,11 @@ export const ProductDetailSheetModal: React.FC<
         </header>
 
         {/* Full-Screen Body */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-zinc-200 min-h-full">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-950 transition-colors">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-zinc-200 dark:divide-zinc-800 min-h-full">
             {/* Left Column: Clean Image Stage */}
-            <div className="lg:col-span-7 p-4 sm:p-8 flex flex-col justify-center bg-zinc-50">
-              <div className="relative aspect-[4/3] w-full rounded-lg bg-white border border-zinc-200 overflow-hidden flex items-center justify-center">
+            <div className="lg:col-span-7 p-4 sm:p-8 flex flex-col justify-center bg-zinc-50 dark:bg-zinc-950/50 transition-colors">
+              <div className="relative aspect-[4/3] w-full rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden flex items-center justify-center transition-colors">
                 <div
                   onClick={() =>
                     setZoomLevel((prev) =>
@@ -214,34 +214,34 @@ export const ProductDetailSheetModal: React.FC<
             </div>
 
             {/* Right Column: Clean Specifications & Actions */}
-            <div className="lg:col-span-5 p-5 sm:p-8 flex flex-col justify-between space-y-6 bg-white">
+            <div className="lg:col-span-5 p-5 sm:p-8 flex flex-col justify-between space-y-6 bg-white dark:bg-zinc-950 transition-colors">
               <div className="space-y-6">
-                <div className="space-y-2 pb-5 border-b border-zinc-200">
+                <div className="space-y-2 pb-5 border-b border-zinc-200 dark:border-zinc-800 transition-colors">
                   <div className="flex items-center justify-between text-xs font-mono text-zinc-500">
                     <span>#SDB-{String(product.id).padStart(2, '0')}</span>
                     <span>{outOfStock ? 'Out of Stock' : 'In Stock'}</span>
                   </div>
-                  <h1 className="text-xl sm:text-2xl font-bold text-zinc-950 tracking-tight">
+                  <h1 className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-zinc-50 tracking-tight transition-colors">
                     {product.name}
                   </h1>
-                  <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-950 pt-1">
+                  <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-950 dark:text-zinc-50 pt-1 transition-colors">
                     ₹{product.price.toLocaleString('en-IN')}
                   </div>
                 </div>
 
                 {/* Specifications Table */}
                 <div className="space-y-2.5">
-                  <h2 className="text-xs font-mono uppercase tracking-wider text-zinc-500">
+                  <h2 className="text-xs font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     Specifications
                   </h2>
-                  <div className="divide-y divide-zinc-200 border-t border-b border-zinc-200 text-xs sm:text-sm">
+                  <div className="divide-y divide-zinc-200 dark:divide-zinc-800 border-t border-b border-zinc-200 dark:border-zinc-800 text-xs sm:text-sm transition-colors">
                     {specs.map((spec) => (
                       <div
                         key={spec.label}
                         className="py-2.5 flex items-center justify-between gap-4"
                       >
-                        <span className="text-zinc-500">{spec.label}</span>
-                        <span className="font-medium text-zinc-950 text-right">
+                        <span className="text-zinc-500 dark:text-zinc-400">{spec.label}</span>
+                        <span className="font-medium text-zinc-950 dark:text-zinc-100 text-right">
                           {spec.value}
                         </span>
                       </div>
@@ -251,18 +251,18 @@ export const ProductDetailSheetModal: React.FC<
 
                 {/* Cart Quantity Stepper if already in cart */}
                 {cartEntry && (
-                  <div className="p-3.5 rounded-md bg-zinc-50 border border-zinc-200 flex items-center justify-between gap-3">
+                  <div className="p-3.5 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 transition-colors">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() =>
                           onUpdateCartQty(product.id, cartEntry.quantity - 1)
                         }
-                        className="w-8 h-8 rounded border border-zinc-300 bg-white text-zinc-950 font-mono text-sm hover:bg-zinc-100 cursor-pointer"
+                        className="w-8 h-8 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 font-mono text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
                       >
                         −
                       </button>
-                      <span className="text-xs font-mono font-bold text-zinc-950 px-2">
+                      <span className="text-xs font-mono font-bold text-zinc-950 dark:text-zinc-50 px-2 transition-colors">
                         {cartEntry.quantity} × ₹{product.price.toLocaleString('en-IN')}
                       </span>
                       <button
@@ -271,7 +271,7 @@ export const ProductDetailSheetModal: React.FC<
                         onClick={() =>
                           onUpdateCartQty(product.id, cartEntry.quantity + 1)
                         }
-                        className="w-8 h-8 rounded border border-zinc-950 bg-zinc-950 text-white font-mono text-sm hover:bg-zinc-800 disabled:opacity-40 cursor-pointer"
+                        className="w-8 h-8 rounded border border-zinc-950 dark:border-zinc-50 bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 font-mono text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-40 cursor-pointer transition-colors"
                       >
                         +
                       </button>
@@ -283,7 +283,7 @@ export const ProductDetailSheetModal: React.FC<
                         onClose();
                         onOpenCartReceipt();
                       }}
-                      className="px-3 py-1.5 rounded bg-zinc-950 text-white text-xs font-medium hover:bg-zinc-800 cursor-pointer"
+                      className="px-3 py-1.5 rounded bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 cursor-pointer transition-colors"
                     >
                       Open Receipt
                     </button>
@@ -292,10 +292,10 @@ export const ProductDetailSheetModal: React.FC<
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-zinc-200">
+              <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-zinc-200 dark:border-zinc-800 transition-colors">
                 <a
                   href={`tel:+${cleanPhone}`}
-                  className="py-3 px-3 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-950 text-xs font-medium text-center transition-colors"
+                  className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors"
                 >
                   Call
                 </a>
@@ -304,7 +304,7 @@ export const ProductDetailSheetModal: React.FC<
                   href={buildDirectWhatsAppUrl()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-3 px-3 rounded-md border border-zinc-300 bg-white hover:bg-zinc-50 text-zinc-950 text-xs font-medium text-center transition-colors"
+                  className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors"
                 >
                   WhatsApp
                 </a>
@@ -313,7 +313,7 @@ export const ProductDetailSheetModal: React.FC<
                   type="button"
                   disabled={outOfStock}
                   onClick={() => onAddToCart(product)}
-                  className="py-3 px-3 rounded-md bg-zinc-950 hover:bg-zinc-800 disabled:bg-zinc-100 disabled:text-zinc-400 text-white text-xs font-medium transition-colors cursor-pointer"
+                  className="py-3 px-3 rounded-md bg-zinc-950 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-100 dark:disabled:bg-zinc-800 disabled:text-zinc-400 text-white dark:text-zinc-900 text-xs font-medium transition-colors cursor-pointer"
                 >
                   {cartEntry ? `In Cart (${cartEntry.quantity})` : 'Add to Cart'}
                 </button>

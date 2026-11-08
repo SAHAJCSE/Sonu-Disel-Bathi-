@@ -35,6 +35,8 @@ import {
   Mic,
   MicOff,
   MessageCircle,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import {
   AdminProfile,
@@ -259,6 +261,31 @@ function SonuBhattiAppContent() {
     audioFeedback.getMuted()
   );
 
+  // Theme Management (Light / Dark)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sdb_theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+    localStorage.setItem('sdb_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+    audioFeedback.play('click');
+  };
+
   // Google Maps Platform Quota Exceeded Banner State
   const [gmpQuotaExceeded, setGmpQuotaExceeded] = useState(false);
   useEffect(() => {
@@ -397,7 +424,9 @@ function SonuBhattiAppContent() {
   // Fetch Public Catalogue
   const fetchPublicCatalogue = useCallback(async () => {
     try {
-      const res = await fetch('/api/public/catalogue');
+      const res = await fetch(`/api/public/catalogue?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (!res.ok) return;
       const data = await res.json();
       if (data.products) {
@@ -418,8 +447,9 @@ function SonuBhattiAppContent() {
     const token = tokenToUse ?? authTokenRef.current;
     if (!token) return;
     try {
-      const res = await fetch('/api/admin/dashboard', {
+      const res = await fetch(`/api/admin/dashboard?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store'
       });
       if (res.status === 401 || res.status === 403) {
         setAuthToken(null);
@@ -569,6 +599,11 @@ function SonuBhattiAppContent() {
     }
   };
 
+  const handleDismissNotification = (id: number) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    audioFeedback.play('click');
+  };
+
   const handleSignOut = () => {
     if (authToken) {
       fetch('/api/auth/logout', {
@@ -681,9 +716,26 @@ function SonuBhattiAppContent() {
             parsed.type === 'product_updated' ||
             parsed.type === 'stock_updated' ||
             parsed.type === 'product_deleted' ||
+            parsed.type === 'catalogue_cleared' ||
             parsed.type === 'settings_updated' ||
             parsed.type === 'batch_synced'
           ) {
+            // Explicitly handle deletions in local state to avoid "zombie" data before refetch completes
+            if (parsed.type === 'product_deleted' && parsed.payload?.productId) {
+              const pid = parsed.payload.productId;
+              setAdminProducts(prev => prev.filter(p => p.id !== pid));
+              setPublicProducts(prev => prev.filter(p => p.id !== pid));
+              setCart(prev => prev.filter(i => i.product.id !== pid));
+            }
+
+            if (parsed.type === 'catalogue_cleared') {
+              setAdminProducts([]);
+              setPublicProducts([]);
+              setCart([]);
+              setStockMovements([]);
+              showActionFeedback('Catalogue Cleared', 'Admin deleted all products', 'general', 'delete');
+            }
+
             fetchPublicCatalogue();
             if (authTokenRef.current) {
               fetchAdminDashboard(authTokenRef.current);
@@ -1132,6 +1184,32 @@ function SonuBhattiAppContent() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    // 1. Instant optimistic clear
+    setAdminProducts([]);
+    setPublicProducts([]);
+    setCart([]);
+    setStockMovements([]);
+    writeCache(CACHE_KEYS.ADMIN_PRODUCTS, []);
+    writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, []);
+    writeCache(CACHE_KEYS.CART, []);
+    writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, []);
+
+    if (!isOnline || !authToken) return;
+    try {
+      const res = await fetch('/api/admin/products', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        void fetchAdminDashboard(authToken);
+        void fetchPublicCatalogue();
+      }
+    } catch {
+      // Optimistic clear already applied
+    }
+  };
+
   const handleUpdateSettings = async (data: Partial<BusinessSettings>) => {
     if (isOnline && authToken) {
       try {
@@ -1298,7 +1376,7 @@ function SonuBhattiAppContent() {
   const totalCartItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50 text-zinc-900">
+    <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 transition-colors duration-300">
       {gmpQuotaExceeded && (
         <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
           <span>
@@ -1319,7 +1397,7 @@ function SonuBhattiAppContent() {
       {/* =================================================================== */}
       {/* STRICT 3-ZONE TOP BAR CONTRACT                                      */}
       {/* =================================================================== */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-2 sm:gap-6 px-3 sm:px-8 py-2.5 sm:py-3.5 bg-white/95 backdrop-blur-xs border-b border-zinc-200 no-print">
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-2 sm:gap-6 px-3 sm:px-8 py-2.5 sm:py-3.5 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xs border-b border-zinc-200 dark:border-zinc-800 no-print transition-colors">
         {/* Zone 1: Single text element wordmark with phone text fitting */}
         <a
           href="#catalogue"
@@ -1327,13 +1405,13 @@ function SonuBhattiAppContent() {
             e.preventDefault();
             setViewMode('public');
           }}
-          className="text-xs xs:text-sm sm:text-base md:text-lg font-extrabold tracking-tight text-zinc-900 whitespace-nowrap shrink-0 font-display truncate max-w-[125px] xs:max-w-[175px] sm:max-w-none"
+          className="text-xs xs:text-sm sm:text-base md:text-lg font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 whitespace-nowrap shrink-0 font-display truncate max-w-[125px] xs:max-w-[175px] sm:max-w-none transition-colors"
         >
           {settings.businessName || t('brandName')}
         </a>
 
         {/* Zone 2: 4 concise single-line text navigation links */}
-        <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-xs lg:text-sm font-medium text-zinc-600">
+        <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-xs lg:text-sm font-medium text-zinc-600 dark:text-zinc-400">
           <a
             href="#catalogue"
             onClick={(e) => {
@@ -1343,7 +1421,7 @@ function SonuBhattiAppContent() {
                 .getElementById('catalogue-grid')
                 ?.scrollIntoView({ behavior: 'smooth' });
             }}
-            className="hover:text-zinc-900 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
           >
             {t('navCatalogue')}
           </a>
@@ -1353,7 +1431,7 @@ function SonuBhattiAppContent() {
               e.preventDefault();
               setIsCartOpen(true);
             }}
-            className="hover:text-zinc-900 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
           >
             {t('navReceiptMaker')}
           </a>
@@ -1369,7 +1447,7 @@ function SonuBhattiAppContent() {
                 setViewMode('public');
               }
             }}
-            className="hover:text-zinc-900 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
           >
             {viewMode === 'public' ? t('navAdminPortal') : t('navPublicStore')}
           </a>
@@ -1406,6 +1484,7 @@ function SonuBhattiAppContent() {
             unreadCount={notifications.filter((n) => !n.isRead).length}
             onMarkRead={handleMarkNotificationRead}
             onMarkAllRead={handleMarkAllNotificationsRead}
+            onDismiss={handleDismissNotification}
             userRole={currentAdmin ? 'admin' : 'customer'}
             onSelectOrder={() => {
               setIsOrdersModalOpen(true);
@@ -1423,6 +1502,26 @@ function SonuBhattiAppContent() {
               );
             }}
           />
+
+          {/* Theme Toggle Button */}
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={toggleTheme}
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            className="p-1.5 sm:px-2.5 sm:py-2 text-xs font-bold rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            {theme === 'light' ? (
+              <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-600 dark:text-zinc-400" />
+            ) : (
+              <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+            )}
+            <span className="hidden xl:inline text-[11px] text-zinc-700 dark:text-zinc-300">
+              {theme === 'light' ? 'Dark' : 'Light'}
+            </span>
+          </motion.button>
 
           <motion.button
             type="button"
@@ -1452,10 +1551,10 @@ function SonuBhattiAppContent() {
       {/* =================================================================== */}
       {/* UTILITY & MULTILINGUAL BAR (Below Header)                           */}
       {/* =================================================================== */}
-      <div className="bg-stone-100 border-b border-stone-200 px-3 sm:px-8 py-2 no-print">
+      <div className="bg-stone-100 dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800 px-3 sm:px-8 py-2 no-print transition-colors">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-zinc-600 truncate min-w-0">
-            <span className="font-semibold text-zinc-800 truncate">{t('tagline')}</span>
+          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-zinc-600 dark:text-zinc-400 truncate min-w-0">
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{t('tagline')}</span>
             <span aria-hidden="true">·</span>
             <button
               type="button"
@@ -1478,7 +1577,7 @@ function SonuBhattiAppContent() {
 
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {/* Persistent Language Selector (English, Hindi, Punjabi) */}
-            <div className="inline-flex items-center gap-0.5 sm:gap-1 bg-white p-0.5 sm:p-1 rounded-lg border border-zinc-300">
+            <div className="inline-flex items-center gap-0.5 sm:gap-1 bg-white dark:bg-zinc-950 p-0.5 sm:p-1 rounded-lg border border-zinc-300 dark:border-zinc-700">
               <Globe className="w-3 h-3 text-zinc-500 ml-1 mr-0.5" />
               {(['en', 'hi', 'pa'] as LanguageCode[]).map((code) => (
                 <button
@@ -1487,8 +1586,8 @@ function SonuBhattiAppContent() {
                   onClick={() => setLang(code)}
                   className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                     lang === code
-                      ? 'bg-zinc-900 text-white'
-                      : 'text-zinc-600 hover:text-zinc-900'
+                      ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                   }`}
                 >
                   {LANGUAGE_META[code].nativeLabel}
@@ -1544,6 +1643,7 @@ function SonuBhattiAppContent() {
             onUpdateProduct={handleUpdateProduct}
             onAdjustStock={handleAdjustStock}
             onDeleteProduct={handleDeleteProduct}
+            onDeleteAll={handleDeleteAll}
             onUpdateSettings={handleUpdateSettings}
             onUpdateAdminProfile={handleUpdateAdminProfile}
           />
@@ -1554,12 +1654,12 @@ function SonuBhattiAppContent() {
             {/* =============================================================== */}
             {/* HERO SECTION: OFFICIAL SONU DIESEL BHATTHI BANNER (BORDERLESS)  */}
             {/* =============================================================== */}
-            <section className="overflow-hidden rounded-2xl bg-white">
-              <div className="w-full bg-white flex items-center justify-center px-3 py-4 sm:px-6 sm:py-6">
+            <section className="overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors">
+              <div className="w-full bg-white dark:bg-zinc-900 flex items-center justify-center px-3 py-4 sm:px-6 sm:py-6 transition-colors">
                 <img
                   src={HERO_WORKSHOP_IMAGE}
                   alt={settings.businessName || t('brandName')}
-                  className="w-full max-w-2xl max-h-52 sm:max-h-68 object-contain mx-auto"
+                  className="w-full max-w-2xl max-h-52 sm:max-h-68 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal dark:opacity-90"
                 />
               </div>
             </section>
@@ -1569,7 +1669,7 @@ function SonuBhattiAppContent() {
             {/* =============================================================== */}
             <section
               id="catalogue-filters"
-              className="scroll-mt-24 bg-white border border-zinc-200 rounded-2xl p-3.5 sm:p-5 space-y-3.5 shadow-2xs"
+              className="scroll-mt-24 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-3.5 sm:p-5 space-y-3.5 shadow-2xs transition-colors"
             >
               {/* Row 1: Search Input + Compact Sort + Icon Grid Toggle + Red Clear Action */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
@@ -1581,7 +1681,7 @@ function SonuBhattiAppContent() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('searchPlaceholder')}
-                    className="w-full pl-9 pr-14 py-2 rounded-xl border border-zinc-300 bg-stone-50/70 focus:bg-white text-xs sm:text-sm text-zinc-900 focus:outline-none focus:border-zinc-900 transition-colors"
+                    className="w-full pl-9 pr-14 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-stone-50/70 dark:bg-zinc-950/70 focus:bg-white dark:focus:bg-zinc-950 text-xs sm:text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors"
                   />
                   <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
                     <button
@@ -1634,7 +1734,7 @@ function SonuBhattiAppContent() {
                             | 'NAME_ASC'
                         )
                       }
-                      className="pl-7 pr-2.5 py-1.5 rounded-lg border border-zinc-300 bg-stone-50 hover:bg-white text-zinc-800 text-[11px] font-bold focus:outline-none focus:border-zinc-900 cursor-pointer"
+                      className="pl-7 pr-2.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-950 hover:bg-white dark:hover:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-[11px] font-bold focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer transition-colors"
                     >
                       <option value="FEATURED">Sort: Default</option>
                       <option value="PRICE_ASC">Price: Low → High</option>
@@ -1646,7 +1746,7 @@ function SonuBhattiAppContent() {
 
                   {/* Icon-Only Column Switcher (Auto/2-Col vs 1-Col) */}
                   <div
-                    className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-stone-100 border border-zinc-200"
+                    className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-stone-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 transition-colors"
                     role="group"
                     aria-label="Grid column layout"
                   >
@@ -1657,8 +1757,8 @@ function SonuBhattiAppContent() {
                       aria-label="2-Column / Auto Grid"
                       className={`p-1.5 rounded-md transition-colors cursor-pointer ${
                         gridCols === 'auto' || gridCols === 2
-                          ? 'bg-zinc-900 text-white shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-900'
+                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
                       }`}
                     >
                       <Grid2x2 className="w-3.5 h-3.5" />
@@ -1670,8 +1770,8 @@ function SonuBhattiAppContent() {
                       aria-label="Single Column List View"
                       className={`p-1.5 rounded-md transition-colors cursor-pointer ${
                         gridCols === 1
-                          ? 'bg-zinc-900 text-white shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-900'
+                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
+                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
                       }`}
                     >
                       <Columns2 className="w-3.5 h-3.5 rotate-90" />
@@ -1693,9 +1793,9 @@ function SonuBhattiAppContent() {
               </div>
 
               {/* Row 2: Clean Dynamic Price Selection (Buttons + Custom Input) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mr-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mr-1">
                     Price:
                   </span>
                   {[
@@ -1715,8 +1815,8 @@ function SonuBhattiAppContent() {
                         }}
                         className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all border cursor-pointer ${
                           active
-                            ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
-                            : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                            ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100 shadow-2xs'
+                            : 'bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600'
                         }`}
                       >
                         {btn.label}
@@ -1726,9 +1826,9 @@ function SonuBhattiAppContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase">Max Budget:</span>
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">Max Budget:</span>
                   <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">₹</span>
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 font-bold text-[10px]">₹</span>
                     <input
                       type="number"
                       placeholder="Custom"
@@ -1738,12 +1838,12 @@ function SonuBhattiAppContent() {
                         setPriceFilter('ALL');
                         setMaxPriceLimit(val);
                       }}
-                      className="w-20 sm:w-24 pl-5 pr-2 py-1 rounded-lg border border-zinc-200 bg-stone-50 focus:bg-white text-[11px] font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-900 transition-colors"
+                      className="w-20 sm:w-24 pl-5 pr-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950 focus:bg-white dark:focus:bg-zinc-900 text-[11px] font-mono font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors"
                     />
                     {maxPriceLimit && (
                       <button 
                         onClick={() => setMaxPriceLimit(null)}
-                        className="absolute -right-1 -top-1 w-3.5 h-3.5 bg-zinc-400 text-white rounded-full flex items-center justify-center hover:bg-zinc-600 cursor-pointer"
+                        className="absolute -right-1 -top-1 w-3.5 h-3.5 bg-zinc-400 dark:bg-zinc-600 text-white rounded-full flex items-center justify-center hover:bg-zinc-600 dark:hover:bg-zinc-400 cursor-pointer"
                       >
                         <X className="w-2.5 h-2.5" />
                       </button>
@@ -1753,9 +1853,9 @@ function SonuBhattiAppContent() {
               </div>
 
               {/* Row 3: Size Dropdown Selection + Result Summary */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                     Bhatti Size:
                   </span>
                   <div className="relative">
@@ -1763,7 +1863,7 @@ function SonuBhattiAppContent() {
                     <select
                       value={selectedSize}
                       onChange={(e) => setSelectedSize(e.target.value)}
-                      className="pl-8 pr-8 py-1.5 rounded-lg border border-zinc-200 bg-white hover:border-zinc-400 text-[11px] font-bold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 transition-all cursor-pointer appearance-none"
+                      className="pl-8 pr-8 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-zinc-400 dark:hover:border-zinc-600 text-[11px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-all cursor-pointer appearance-none"
                     >
                       {[
                         { value: 'ALL', label: t('filterAllSizes') },
@@ -1781,10 +1881,10 @@ function SonuBhattiAppContent() {
                   </div>
                 </div>
 
-                <div className="text-xs text-zinc-500 font-medium flex items-center justify-between sm:justify-end gap-2">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center justify-between sm:justify-end gap-2">
                   <span>
                     Showing{' '}
-                    <strong className="font-mono tabular-nums text-zinc-900">
+                    <strong className="font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
                       {filteredProducts.length}
                     </strong>{' '}
                     of {activePublicProducts.length} models
@@ -1802,15 +1902,15 @@ function SonuBhattiAppContent() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.18 }}
-                  className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-3"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-10 text-center space-y-3 transition-colors"
                 >
-                  <p className="text-base font-bold text-zinc-800">
+                  <p className="text-base font-bold text-zinc-800 dark:text-zinc-200">
                     {t('noProductsFound')}
                   </p>
                   <button
                     type="button"
                     onClick={resetAllCatalogueFilters}
-                    className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                    className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 cursor-pointer inline-flex items-center gap-1.5 shadow-xs transition-colors"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>{t('clearAllBtn')}</span>
@@ -1847,11 +1947,11 @@ function SonuBhattiAppContent() {
                             duration: 0.15,
                             ease: 'easeOut',
                           }}
-                          className="group bg-white text-zinc-900 border border-zinc-200 hover:border-zinc-300 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 shadow-sm cursor-pointer"
+                          className="group bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 shadow-sm cursor-pointer"
                         >
                           <div>
                             {/* Product Image Inset Frame (4:3) */}
-                            <div className="relative aspect-[4/3] bg-stone-100 overflow-hidden border-b border-zinc-200">
+                            <div className="relative aspect-[4/3] bg-stone-100 dark:bg-zinc-950 overflow-hidden border-b border-zinc-200 dark:border-zinc-800 transition-colors">
                               <ProductImage
                                 src={product.imageUrl}
                                 alt={product.name}
@@ -1897,16 +1997,16 @@ function SonuBhattiAppContent() {
                               </div>
 
                               {/* Bigger Product Name */}
-                              <h2 className="text-sm sm:text-base font-extrabold text-zinc-900 leading-snug line-clamp-2">
+                              <h2 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-zinc-100 leading-snug line-clamp-2">
                                 {product.name}
                               </h2>
 
                               {/* Dynamic Price Badge */}
-                              <div className="pt-1.5 flex items-baseline justify-between border-t border-stone-100">
-                                <span className="text-[11px] font-medium text-zinc-500">
+                              <div className="pt-1.5 flex items-baseline justify-between border-t border-stone-100 dark:border-zinc-800 transition-colors">
+                                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
                                   {t('priceLabel')}
                                 </span>
-                                <span className="text-base sm:text-lg font-extrabold font-mono tabular-nums text-zinc-900">
+                                <span className="text-base sm:text-lg font-extrabold font-mono tabular-nums text-zinc-900 dark:text-zinc-50 transition-colors">
                                   ₹{product.price.toLocaleString('en-IN')}
                                 </span>
                               </div>
@@ -1920,7 +2020,7 @@ function SonuBhattiAppContent() {
                           >
                             {cartEntry ? (
                               <div className="flex items-center gap-1.5">
-                                <div className="flex-1 flex items-center justify-between gap-1.5 p-1 rounded-xl bg-stone-100 border border-zinc-200">
+                                <div className="flex-1 flex items-center justify-between gap-1.5 p-1 rounded-xl bg-stone-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 transition-colors">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1934,7 +2034,7 @@ function SonuBhattiAppContent() {
                                   >
                                     <Minus className="w-3.5 h-3.5" />
                                   </button>
-                                  <div className="text-xs sm:text-sm font-extrabold font-mono tabular-nums text-zinc-900 truncate px-1">
+                                  <div className="text-xs sm:text-sm font-extrabold font-mono tabular-nums text-zinc-900 dark:text-zinc-50 truncate px-1 transition-colors">
                                     {cartEntry.quantity}
                                   </div>
                                   <button
@@ -1961,7 +2061,7 @@ function SonuBhattiAppContent() {
                                     const text = `*Inquiry for Sonu Diesel Bhatti*\n\nProduct: *${product.name}*\nSize: ${product.size}\nPrice: ₹${product.price.toLocaleString('en-IN')}\n\nIs this model available for dispatch?`;
                                     window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
                                   }}
-                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-zinc-200 hover:bg-emerald-50 hover:border-emerald-500 text-emerald-600 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
+                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
                                   title="Inquire on WhatsApp"
                                 >
                                   <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -2119,8 +2219,8 @@ function SonuBhattiAppContent() {
       {/* =================================================================== */}
       {/* FULLY ATTACHED BOTTOM APP NAVIGATION BAR                            */}
       {/* =================================================================== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-zinc-200 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] px-3 py-2 no-print">
-        <div className="max-w-md mx-auto bg-stone-100 border border-zinc-200 rounded-full py-1 px-3 flex items-center justify-around text-xs font-semibold text-zinc-700">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_-6px_24px_rgba(0,0,0,0.3)] px-3 py-2 no-print transition-colors">
+        <div className="max-w-md mx-auto bg-stone-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full py-1 px-3 flex items-center justify-around text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition-colors">
           <button
             type="button"
             onClick={() => {
@@ -2129,8 +2229,8 @@ function SonuBhattiAppContent() {
             }}
             className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
               viewMode === 'public'
-                ? 'bg-zinc-900 text-white font-bold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-900'
+                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
@@ -2140,12 +2240,12 @@ function SonuBhattiAppContent() {
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
-            className="relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 hover:text-zinc-900 cursor-pointer transition-colors"
+            className="relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer transition-colors"
           >
-            <ShoppingBag className="w-4 h-4 text-emerald-600" />
+            <ShoppingBag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span className="text-[10px] font-bold">Cart</span>
             {totalCartItems > 0 && (
-              <span className="absolute -top-0.5 right-0.5 px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-mono text-[9px] font-bold shadow-2xs">
+              <span className="absolute -top-0.5 right-0.5 px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-mono text-[9px] font-bold shadow-2xs ring-2 ring-white dark:ring-zinc-900">
                 {totalCartItems}
               </span>
             )}
@@ -2154,7 +2254,7 @@ function SonuBhattiAppContent() {
           <button
             type="button"
             onClick={() => setIsOrdersModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 hover:text-zinc-900 cursor-pointer transition-colors"
+            className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer transition-colors"
           >
             <Send className="w-4 h-4 text-[#00C1FD]" />
             <span className="text-[10px]">Orders</span>
@@ -2170,8 +2270,8 @@ function SonuBhattiAppContent() {
             }}
             className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
               viewMode === 'admin_login' || viewMode === 'admin_dashboard'
-                ? 'bg-zinc-900 text-white font-bold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-900'
+                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
             <Lock className="w-4 h-4 text-amber-500" />

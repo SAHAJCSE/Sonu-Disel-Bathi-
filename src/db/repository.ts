@@ -544,6 +544,19 @@ export async function deleteProductSafely(productId: number) {
   }
 }
 
+export async function deleteAllProducts() {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.delete(stockMovements);
+      const result = await tx.delete(products).returning();
+      return { deletedCount: result.length };
+    });
+  } catch (error: any) {
+    console.error('Database transaction failed in deleteAllProducts:', error);
+    throw new Error('Failed to delete all products.', { cause: error });
+  }
+}
+
 // ============================================================================
 // ROLE-BASED USER PROFILES (Admin, Simple User / Customer, Staff)
 // ============================================================================
