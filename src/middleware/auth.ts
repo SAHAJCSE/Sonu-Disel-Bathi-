@@ -38,10 +38,10 @@ export async function resolveAuthUser(
 
   // 1. Password session token (Internal Admin Portal)
   if (token.startsWith('sdb_sess_')) {
-    if (token.startsWith('sdb_sess_0988_')) {
+    if (token.startsWith('sdb_sess_8708_')) {
       return {
         id: 1,
-        uid: 'admin-master-0988',
+        uid: 'admin-master-8708',
         email: 'admin@sonubhatti.com',
         name: 'Administrator',
         role: 'admin',

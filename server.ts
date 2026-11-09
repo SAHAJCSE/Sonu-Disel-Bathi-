@@ -6,6 +6,7 @@ import fs from 'fs';
 import zlib from 'zlib';
 import { GoogleGenAI, Type } from '@google/genai';
 import { requireAuth, requireAdmin, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
+import { adminDb } from './src/lib/firebase-admin.ts';
 import {
   getPublicProducts,
   getAllProductsForAdmin,
@@ -38,6 +39,41 @@ import {
   storeImageBytes,
   getImageById,
 } from './src/db/repository.ts';
+
+/**
+ * Ensures the live catalogue in Firestore matches the main database.
+ * Used for real-time sync across all devices via Firestore listeners.
+ */
+async function syncCatalogueToFirestore() {
+  try {
+    const productsList = await getAllProductsForAdmin();
+    const batch = adminDb.batch();
+    
+    // Clear existing products in Firestore to prevent zombies
+    const snapshot = await adminDb.collection('products').get();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    
+    productsList.forEach((product) => {
+      const docRef = adminDb.collection('products').doc(String(product.id));
+      batch.set(docRef, product);
+    });
+    
+    await batch.commit();
+    console.log(`Catalogue synced to Firestore successfully (${productsList.length} items).`);
+  } catch (error) {
+    console.error('Failed to sync catalogue to Firestore:', error);
+  }
+}
+
+async function syncSettingsToFirestore() {
+  try {
+    const settings = await getBusinessSettings();
+    await adminDb.collection('settings').doc('global').set(settings);
+    console.log('Settings synced to Firestore successfully.');
+  } catch (error) {
+    console.error('Failed to sync settings to Firestore:', error);
+  }
+}
 
 dotenv.config();
 
@@ -287,9 +323,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     const trimmedPassword = String(password || '').trim();
 
-    // Direct master admin access with password 0988
-    if (trimmedPassword === '0988') {
-      const token = `sdb_sess_0988_${Date.now()}`;
+    // Direct master admin access with password 8708
+    if (trimmedPassword === '8708') {
+      const token = `sdb_sess_8708_${Date.now()}`;
       let targetAdmin = null;
       try {
         const admins = await getAllAdmins();
@@ -304,7 +340,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         token,
         admin: {
           id: targetAdmin?.id || 1,
-          uid: targetAdmin?.uid || 'admin-master-0988',
+          uid: targetAdmin?.uid || 'admin-master-8708',
           email: targetAdmin?.email || 'admin@sonubhatti.com',
           name: targetAdmin?.name || 'Administrator',
           role: 'admin',
@@ -701,6 +737,9 @@ app.post('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Resp
       adminEmail: req.admin!.email,
     });
 
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
+
     res.status(201).json({ product: created });
   } catch (error: any) {
     console.error('Error in POST /api/admin/products:', error);
@@ -750,6 +789,9 @@ app.put('/api/admin/products/:id', requireAdmin, async (req: AuthRequest, res: R
       adminEmail: req.admin!.email,
     });
 
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
+
     res.json({ product: updated });
   } catch (error: any) {
     console.error('Error in PUT /api/admin/products/:id:', error);
@@ -788,6 +830,9 @@ app.post('/api/admin/products/:id/stock', requireAdmin, async (req: AuthRequest,
       adminEmail: req.admin!.email,
     });
 
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
+
     res.json(result);
   } catch (error: any) {
     console.error('Error in POST /api/admin/products/:id/stock:', error);
@@ -805,6 +850,9 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req: AuthRequest, res
       adminEmail: req.admin!.email,
     });
 
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
+
     res.json(result);
   } catch (error: any) {
     console.error('Error in DELETE /api/admin/products/:id:', error);
@@ -820,6 +868,9 @@ app.delete('/api/admin/products', requireAdmin, async (req: AuthRequest, res: Re
       adminEmail: req.admin!.email,
       deletedCount: result.deletedCount,
     });
+
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
 
     res.json(result);
   } catch (error: any) {
@@ -844,6 +895,9 @@ app.put('/api/admin/settings', requireAdmin, async (req: AuthRequest, res: Respo
       settings: updated,
       adminEmail: req.admin!.email,
     });
+
+    // Sync to Firestore for real-time device broadcast
+    void syncSettingsToFirestore();
 
     res.json({ settings: updated });
   } catch (error: any) {
@@ -956,6 +1010,10 @@ app.post('/api/admin/sync-batch', requireAdmin, async (req: AuthRequest, res: Re
       adminEmail: req.admin!.email,
       syncedCount: results.filter((r) => r.status === 'synced').length,
     });
+
+    // Sync to Firestore for real-time device broadcast
+    void syncCatalogueToFirestore();
+    void syncSettingsToFirestore();
 
     res.json({
       results,
@@ -1332,6 +1390,14 @@ app.get('/api/images/:id', async (req: Request, res: Response) => {
 
 async function startServer() {
   const PORT = 3000;
+
+  // Perform initial sync to Firestore to ensure real-time listeners have data
+  try {
+    console.log('Performing initial Firestore sync...');
+    await Promise.all([syncCatalogueToFirestore(), syncSettingsToFirestore()]);
+  } catch (err) {
+    console.error('Initial sync failed:', err);
+  }
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

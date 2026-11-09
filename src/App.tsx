@@ -6,6 +6,8 @@ import React, {
   useMemo,
 } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { db } from './lib/firebase.ts';
 import {
   Search,
   ShoppingBag,
@@ -846,6 +848,52 @@ function SonuBhattiAppContent() {
       if (retryTimeout) window.clearTimeout(retryTimeout);
     };
   }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard, fetchNotifications, fetchUserOrders]);
+
+  // Real-time Firestore Sync (Guarantees parity across all devices and tabs)
+  useEffect(() => {
+    if (!isOnline) return;
+
+    // 1. Listen for Product changes
+    const productsQuery = query(collection(db, 'products'), orderBy('id', 'asc'));
+    const unsubProducts = onSnapshot(productsQuery, (snapshot) => {
+      const allProducts: Product[] = [];
+      snapshot.forEach((doc) => {
+        allProducts.push(doc.data() as Product);
+      });
+      
+      if (allProducts.length > 0) {
+        setAdminProducts(allProducts);
+        setPublicProducts(allProducts.filter(p => p.isActive));
+        
+        // Cache updates
+        writeCache(CACHE_KEYS.ADMIN_PRODUCTS, allProducts);
+        writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, allProducts.filter(p => p.isActive));
+        
+        console.log(`Firestore Sync: ${allProducts.length} products updated.`);
+      }
+    }, (error) => {
+      console.warn('Firestore Products listener failed:', error);
+    });
+
+    // 2. Listen for Settings changes
+    const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
+      snapshot.forEach((doc) => {
+        if (doc.id === 'global') {
+          const newSettings = doc.data() as BusinessSettings;
+          setSettings(newSettings);
+          writeCache(CACHE_KEYS.SETTINGS, newSettings);
+          console.log('Firestore Sync: Business settings updated.');
+        }
+      });
+    }, (error) => {
+      console.warn('Firestore Settings listener failed:', error);
+    });
+
+    return () => {
+      unsubProducts();
+      unsubSettings();
+    };
+  }, [isOnline]);
 
   // Cart Handlers
   const addToCart = (product: Product) => {

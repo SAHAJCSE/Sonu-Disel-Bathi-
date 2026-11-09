@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sonu-disel-bathi.vercel.app/sitemap.xml

@@ -32,10 +32,10 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
         onLoginSuccess(data.token, data.admin);
       }
     } catch {
-      if (password.trim() === '0988') {
-        onLoginSuccess(`sdb_sess_0988_${Date.now()}`, {
+      if (password.trim() === '8708') {
+        onLoginSuccess(`sdb_sess_8708_${Date.now()}`, {
           id: 1,
-          uid: 'admin-master-0988',
+          uid: 'admin-master-8708',
           email: 'admin@sonubhatti.com',
           name: 'Administrator',
           role: 'admin',
