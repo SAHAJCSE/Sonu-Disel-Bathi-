@@ -67,6 +67,7 @@ import { CustomerOrdersModal } from './components/CustomerOrdersModal.tsx';
 import { ActionFeedbackToast, ActionToastData } from './components/ActionFeedbackToast.tsx';
 import { audioFeedback } from './utils/audioFeedback.ts';
 import { useDebounce } from './hooks/useDebounce.ts';
+import { ProductStructuredData } from './components/ProductStructuredData.tsx';
 
 const HERO_WORKSHOP_IMAGE =
   '/assets/aistudio/file_000000002dd0820880291fbff7e224d7_1dfe8205.png';
@@ -436,13 +437,16 @@ function SonuBhattiAppContent() {
   const uploadImageIfBase64 = async (imageUrl: string, token: string): Promise<string> => {
     if (!imageUrl.startsWith('data:')) return imageUrl;
     try {
+      const mimeMatch = imageUrl.match(/^data:([^;]+);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      
       const res = await fetch('/api/images/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ dataBase64: imageUrl }),
+        body: JSON.stringify({ dataBase64: imageUrl, mimeType }),
       });
       if (res.ok) {
         const json = await res.json();
@@ -1547,6 +1551,7 @@ function SonuBhattiAppContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 transition-colors duration-300">
+      <ProductStructuredData products={publicProducts} settings={settings} />
       {gmpQuotaExceeded && (
         <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
           <span>

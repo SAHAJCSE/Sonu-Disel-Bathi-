@@ -44,7 +44,10 @@ export const ProductImage: React.FC<ProductImageProps> = ({
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
+        onError={() => {
+          console.error(`ProductImage failed to load: ${src}`);
+          setError(true);
+        }}
         className={`w-full h-full object-contain transition-all duration-200 ${
           loaded ? 'opacity-100' : 'opacity-0'
         } ${enableHoverEffect ? 'group-hover:scale-103' : ''}`}

@@ -6,7 +6,18 @@ import fs from 'fs';
 import zlib from 'zlib';
 import { GoogleGenAI, Type } from '@google/genai';
 import { requireAuth, requireAdmin, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
-import { adminDb } from './src/lib/firebase-admin.ts';
+import { adminAuth } from './src/lib/firebase-admin.ts';
+import { db as clientDb } from './src/lib/firebase.ts';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  writeBatch, 
+  setDoc,
+  deleteDoc,
+  query,
+  limit
+} from 'firebase/firestore';
 import {
   getPublicProducts,
   getAllProductsForAdmin,
@@ -62,14 +73,14 @@ function normalizeForFirestore(obj: any) {
 async function syncCatalogueToFirestore() {
   try {
     const productsList = await getAllProductsForAdmin();
-    const batch = adminDb.batch();
+    const batch = writeBatch(clientDb);
     
     // Clear existing products in Firestore to prevent zombies
-    const snapshot = await adminDb.collection('products').get();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    const snapshot = await getDocs(collection(clientDb, 'products'));
+    snapshot.docs.forEach((d) => batch.delete(d.ref));
     
     productsList.forEach((product) => {
-      const docRef = adminDb.collection('products').doc(String(product.id));
+      const docRef = doc(clientDb, 'products', String(product.id));
       batch.set(docRef, normalizeForFirestore(product));
     });
     
@@ -83,7 +94,7 @@ async function syncCatalogueToFirestore() {
 async function syncSettingsToFirestore() {
   try {
     const settings = await getBusinessSettings();
-    await adminDb.collection('settings').doc('global').set(normalizeForFirestore(settings));
+    await setDoc(doc(clientDb, 'settings', 'global'), normalizeForFirestore(settings));
     console.log('Settings synced to Firestore successfully.');
   } catch (error) {
     console.error('Failed to sync settings to Firestore:', error);
@@ -93,14 +104,14 @@ async function syncSettingsToFirestore() {
 async function syncOrdersToFirestore() {
   try {
     const ordersList = await getAllOrdersForAdmin();
-    const batch = adminDb.batch();
+    const batch = writeBatch(clientDb);
     
     // We only sync the most recent 100 orders to Firestore for real-time performance
-    const snapshot = await adminDb.collection('orders').get();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    const snapshot = await getDocs(collection(clientDb, 'orders'));
+    snapshot.docs.forEach((d) => batch.delete(d.ref));
     
     ordersList.slice(0, 100).forEach((order) => {
-      const docRef = adminDb.collection('orders').doc(String(order.id));
+      const docRef = doc(clientDb, 'orders', String(order.id));
       batch.set(docRef, normalizeForFirestore(order));
     });
     
@@ -114,13 +125,13 @@ async function syncOrdersToFirestore() {
 async function syncStockMovementsToFirestore() {
   try {
     const movements = await getRecentStockMovements(50);
-    const batch = adminDb.batch();
+    const batch = writeBatch(clientDb);
     
-    const snapshot = await adminDb.collection('movements').get();
-    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    const snapshot = await getDocs(collection(clientDb, 'movements'));
+    snapshot.docs.forEach((d) => batch.delete(d.ref));
     
     movements.forEach((mov) => {
-      const docRef = adminDb.collection('movements').doc(String(mov.id));
+      const docRef = doc(clientDb, 'movements', String(mov.id));
       batch.set(docRef, normalizeForFirestore(mov));
     });
     
@@ -1443,10 +1454,11 @@ app.get('/api/images/:id', async (req: Request, res: Response) => {
     if (!img) return res.status(404).send('Image not found');
     const buf = Buffer.from(img.dataBase64, 'base64');
     res.setHeader('Content-Type', img.mimeType || 'image/jpeg');
+    res.setHeader('Content-Length', buf.length);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.send(buf);
   } catch (error: any) {
-    console.error('Error in GET /api/images/:id:', error);
+    console.error(`Error in GET /api/images/${req.params.id}:`, error);
     res.status(500).send('Failed to load image from database');
   }
 });
