@@ -7,13 +7,24 @@
         var NativeWebSocket = window.WebSocket;
         if (NativeWebSocket) {
           var WrappedWebSocket = function(url, protocols) {
-            var ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
-            ws.addEventListener('error', function(e) {
-              try {
-                e.stopImmediatePropagation();
-              } catch (err) {}
-            }, true);
-            return ws;
+            try {
+              var ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
+              ws.addEventListener('error', function(e) {
+                try {
+                  e.stopImmediatePropagation();
+                } catch (err) {}
+              }, true);
+              return ws;
+            } catch (err) {
+              // Return a dummy object if WebSocket fails to instantiate (common in some restricted environments)
+              console.warn('WebSocket instantiation blocked or failed.');
+              return {
+                addEventListener: function() {},
+                removeEventListener: function() {},
+                send: function() {},
+                close: function() {}
+              };
+            }
           };
           WrappedWebSocket.prototype = NativeWebSocket.prototype;
           WrappedWebSocket.CONNECTING = NativeWebSocket.CONNECTING;
@@ -26,7 +37,8 @@
         var origError = console.error;
         console.error = function() {
           var msg = Array.prototype.slice.call(arguments).map(String).join(' ');
-          if (msg.includes('[vite]') || msg.includes('WebSocket')) {
+          // Specifically ignore the common Vite "WebSocket closed without opened" error
+          if (msg.includes('[vite]') || msg.includes('WebSocket') || msg.includes('closed without opened')) {
             return;
           }
           origError.apply(console, arguments);
@@ -38,6 +50,7 @@
           if (
             msg.includes('WebSocket') ||
             msg.includes('[vite]') ||
+            msg.includes('closed without opened') ||
             file.includes('@vite/client')
           ) {
             event.stopImmediatePropagation();
