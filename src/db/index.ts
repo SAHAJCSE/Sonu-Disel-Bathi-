@@ -18,7 +18,11 @@ export const createPool = () => {
     });
 
     global._postgresPool.on('error', (err) => {
-      console.error('Unexpected error on idle SQL pool client:', err);
+      if (err?.message?.includes('Connection terminated unexpectedly') || err?.message?.includes('closed')) {
+        console.warn('Idle SQL pool connection closed by server, client recycled.');
+      } else {
+        console.error('Unexpected error on idle SQL pool client:', err);
+      }
     });
   }
   return global._postgresPool;

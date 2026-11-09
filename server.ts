@@ -41,6 +41,21 @@ import {
 } from './src/db/repository.ts';
 
 /**
+ * Helper to normalize objects for Firestore (e.g. converting Dates to ISO strings)
+ */
+function normalizeForFirestore(obj: any) {
+  const result: any = { ...obj };
+  for (const key in result) {
+    if (result[key] instanceof Date) {
+      result[key] = result[key].toISOString();
+    } else if (result[key] === null) {
+      delete result[key]; // Firestore handles undefined/null differently, but cleaning is safer
+    }
+  }
+  return result;
+}
+
+/**
  * Ensures the live catalogue in Firestore matches the main database.
  * Used for real-time sync across all devices via Firestore listeners.
  */
@@ -55,7 +70,7 @@ async function syncCatalogueToFirestore() {
     
     productsList.forEach((product) => {
       const docRef = adminDb.collection('products').doc(String(product.id));
-      batch.set(docRef, product);
+      batch.set(docRef, normalizeForFirestore(product));
     });
     
     await batch.commit();
@@ -68,10 +83,51 @@ async function syncCatalogueToFirestore() {
 async function syncSettingsToFirestore() {
   try {
     const settings = await getBusinessSettings();
-    await adminDb.collection('settings').doc('global').set(settings);
+    await adminDb.collection('settings').doc('global').set(normalizeForFirestore(settings));
     console.log('Settings synced to Firestore successfully.');
   } catch (error) {
     console.error('Failed to sync settings to Firestore:', error);
+  }
+}
+
+async function syncOrdersToFirestore() {
+  try {
+    const ordersList = await getAllOrdersForAdmin();
+    const batch = adminDb.batch();
+    
+    // We only sync the most recent 100 orders to Firestore for real-time performance
+    const snapshot = await adminDb.collection('orders').get();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    
+    ordersList.slice(0, 100).forEach((order) => {
+      const docRef = adminDb.collection('orders').doc(String(order.id));
+      batch.set(docRef, normalizeForFirestore(order));
+    });
+    
+    await batch.commit();
+    console.log(`Orders synced to Firestore successfully (${Math.min(ordersList.length, 100)} items).`);
+  } catch (error) {
+    console.error('Failed to sync orders to Firestore:', error);
+  }
+}
+
+async function syncStockMovementsToFirestore() {
+  try {
+    const movements = await getRecentStockMovements(50);
+    const batch = adminDb.batch();
+    
+    const snapshot = await adminDb.collection('movements').get();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    
+    movements.forEach((mov) => {
+      const docRef = adminDb.collection('movements').doc(String(mov.id));
+      batch.set(docRef, normalizeForFirestore(mov));
+    });
+    
+    await batch.commit();
+    console.log(`Stock movements synced to Firestore successfully (${movements.length} items).`);
+  } catch (error) {
+    console.error('Failed to sync stock movements to Firestore:', error);
   }
 }
 
@@ -530,6 +586,9 @@ app.post('/api/orders', optionalAuth, async (req: AuthRequest, res: Response) =>
       broadcastRealtimeEvent('notification_new', customerNotification);
     }
 
+    // Background sync to Firestore for real-time order tracking across devices
+    void syncOrdersToFirestore();
+
     res.status(201).json({
       success: true,
       order,
@@ -651,6 +710,9 @@ app.put('/api/admin/orders/:id/status', requireAdmin, async (req: AuthRequest, r
     if (custNotif) {
       broadcastRealtimeEvent('notification_new', custNotif);
     }
+
+    // Background sync to Firestore for real-time status update
+    void syncOrdersToFirestore();
 
     res.json({ success: true, order: updated });
   } catch (error: any) {
@@ -832,6 +894,7 @@ app.post('/api/admin/products/:id/stock', requireAdmin, async (req: AuthRequest,
 
     // Sync to Firestore for real-time device broadcast
     void syncCatalogueToFirestore();
+    void syncStockMovementsToFirestore();
 
     res.json(result);
   } catch (error: any) {
@@ -1394,7 +1457,12 @@ async function startServer() {
   // Perform initial sync to Firestore to ensure real-time listeners have data
   try {
     console.log('Performing initial Firestore sync...');
-    await Promise.all([syncCatalogueToFirestore(), syncSettingsToFirestore()]);
+    await Promise.all([
+      syncCatalogueToFirestore(),
+      syncSettingsToFirestore(),
+      syncOrdersToFirestore(),
+      syncStockMovementsToFirestore(),
+    ]);
   } catch (err) {
     console.error('Initial sync failed:', err);
   }

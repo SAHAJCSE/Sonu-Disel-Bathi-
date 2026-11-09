@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Mic,
   MicOff,
@@ -146,13 +146,27 @@ export const AdminSmartEntry: React.FC<AdminSmartEntryProps> = ({
   const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
   const [voiceStep, setVoiceStep] = useState<'idle' | 'image' | 'confirm'>('idle');
   const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   const toggleMicrophone = () => {
     setVoiceFeedback(null);
     setVoiceStep('idle');
+
     if (isListening) {
-      recognitionRef.current?.stop();
+      isListeningRef.current = false;
       setIsListening(false);
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      if (transcript.trim()) {
+        parseVoiceCommand(transcript);
+      }
       return;
     }
 
@@ -162,34 +176,73 @@ export const AdminSmartEntry: React.FC<AdminSmartEntryProps> = ({
 
     if (!SpeechRecognition) {
       setVoiceFeedback(
-        'Browser speech recognition is unavailable in this frame. You can click an example command below or type your command.'
+        'Browser speech recognition is unavailable in this browser window. You can click an example command below or type your command.'
       );
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = LANGUAGE_META[voiceLang].speechLang;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = LANGUAGE_META[voiceLang].speechLang;
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onresult = (event: any) => {
-      const spokenText = event.results?.[0]?.[0]?.transcript || '';
-      setTranscript(spokenText);
-      setIsListening(false);
-      if (spokenText.trim()) {
-        parseVoiceCommand(spokenText);
-      }
-    };
-    recognition.onerror = () => {
-      setIsListening(false);
-    };
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+      let currentSpokenText = '';
 
-    recognitionRef.current = recognition;
-    recognition.start();
+      recognition.onstart = () => {
+        setIsListening(true);
+        isListeningRef.current = true;
+      };
+
+      recognition.onresult = (event: any) => {
+        let text = '';
+        for (let i = 0; i < event.results.length; i++) {
+          text += event.results[i][0]?.transcript || '';
+        }
+        currentSpokenText = text.trim();
+        if (currentSpokenText) {
+          setTranscript(currentSpokenText);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          isListeningRef.current = false;
+          setIsListening(false);
+          setVoiceFeedback('Microphone permission blocked. Please allow microphone access in your browser bar.');
+        } else if (event.error === 'no-speech') {
+          setVoiceFeedback('Listening... Please speak your command clearly into your microphone.');
+        } else if (event.error !== 'aborted') {
+          setVoiceFeedback(`Voice notice (${event.error}). You can also type or click an example command.`);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListeningRef.current) {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.warn('Speech recognition restart notice:', err);
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+        } else {
+          setIsListening(false);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      isListeningRef.current = true;
+      setIsListening(true);
+      recognition.start();
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err);
+      isListeningRef.current = false;
+      setIsListening(false);
+      setVoiceFeedback('Could not access microphone. Please check browser permissions.');
+    }
   };
 
   const parseVoiceCommand = async (commandText: string) => {

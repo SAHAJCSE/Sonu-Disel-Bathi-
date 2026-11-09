@@ -3,27 +3,57 @@
   <head>
     <script>
       // Suppress harmless Vite HMR WebSocket connection errors in preview iframe environments
-      window.addEventListener('error', function (event) {
-        var msg = String(event.message || '');
-        var file = String(event.filename || '');
-        if (
-          msg.includes('WebSocket') ||
-          msg.includes('[vite]') ||
-          file.includes('@vite/client')
-        ) {
-          event.stopImmediatePropagation();
-          event.preventDefault();
-          return true;
+      (function() {
+        var NativeWebSocket = window.WebSocket;
+        if (NativeWebSocket) {
+          var WrappedWebSocket = function(url, protocols) {
+            var ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
+            ws.addEventListener('error', function(e) {
+              try {
+                e.stopImmediatePropagation();
+              } catch (err) {}
+            }, true);
+            return ws;
+          };
+          WrappedWebSocket.prototype = NativeWebSocket.prototype;
+          WrappedWebSocket.CONNECTING = NativeWebSocket.CONNECTING;
+          WrappedWebSocket.OPEN = NativeWebSocket.OPEN;
+          WrappedWebSocket.CLOSING = NativeWebSocket.CLOSING;
+          WrappedWebSocket.CLOSED = NativeWebSocket.CLOSED;
+          window.WebSocket = WrappedWebSocket;
         }
-      }, true);
 
-      window.addEventListener('unhandledrejection', function (event) {
-        var reason = String(event.reason?.message || event.reason || '');
-        if (reason.includes('WebSocket') || reason.includes('[vite]')) {
-          event.stopImmediatePropagation();
-          event.preventDefault();
-        }
-      }, true);
+        var origError = console.error;
+        console.error = function() {
+          var msg = Array.prototype.slice.call(arguments).map(String).join(' ');
+          if (msg.includes('[vite]') || msg.includes('WebSocket')) {
+            return;
+          }
+          origError.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function (event) {
+          var msg = String(event.message || event.error?.message || '');
+          var file = String(event.filename || '');
+          if (
+            msg.includes('WebSocket') ||
+            msg.includes('[vite]') ||
+            file.includes('@vite/client')
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = String(event.reason?.message || event.reason || '');
+          if (reason.includes('WebSocket') || reason.includes('[vite]')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

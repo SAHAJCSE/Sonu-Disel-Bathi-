@@ -185,14 +185,14 @@ function SonuBhattiAppContent() {
   const [viewMode, setViewMode] = useState<
     'public' | 'admin_login' | 'admin_dashboard'
   >('public');
-  const [adminTab, setAdminTab] = useState<'inventory' | 'smart_entry' | 'history' | 'settings'>('inventory');
+  const [adminTab, setAdminTab] = useState<'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings'>('inventory');
   
   const [viewHistory, setViewHistory] = useState<
-    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'smart_entry' | 'history' | 'settings' }[]
+    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings' }[]
   >([]);
 
   const handleNavigate = useCallback(
-    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'smart_entry' | 'history' | 'settings') => {
+    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings') => {
       if (newMode === viewMode && (!newTab || newTab === adminTab)) return;
       
       setViewHistory((prev) => [...prev, { mode: viewMode, tab: adminTab }]);
@@ -283,6 +283,7 @@ function SonuBhattiAppContent() {
   );
   const [notifications, setNotifications] = useState<LiveNotification[]>([]);
   const [userOrders, setUserOrders] = useState<CustomerOrder[]>([]);
+  const [allOrders, setAllOrders] = useState<CustomerOrder[]>([]);
   const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
   const [liveToast, setLiveToast] = useState<{
     title: string;
@@ -353,34 +354,56 @@ function SonuBhattiAppContent() {
 
   // Voice Search State
   const [isListening, setIsListening] = useState(false);
+  const isListeningRef = useRef(false);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = lang === 'hi' ? 'hi-IN' : lang === 'pa' ? 'pa-IN' : 'en-IN';
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = lang === 'hi' ? 'hi-IN' : lang === 'pa' ? 'pa-IN' : 'en-IN';
 
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setSearchQuery(transcript);
-        showActionFeedback('Voice Search', `Searching for: ${transcript}`, 'general', 'click');
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error !== 'no-speech') {
-          showActionFeedback('Voice Error', 'Could not understand voice', 'general');
+      rec.onresult = (event: any) => {
+        let text = '';
+        for (let i = 0; i < event.results.length; i++) {
+          text += event.results[i][0]?.transcript || '';
+        }
+        if (text.trim()) {
+          setSearchQuery(text.trim());
         }
       };
 
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
+      rec.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          isListeningRef.current = false;
+          setIsListening(false);
+          showActionFeedback('Mic Blocked', 'Please allow microphone access in browser', 'general');
+        }
       };
+
+      rec.onend = () => {
+        // If still in listening state, restart immediately to support long sessions until manually stopped
+        if (isListeningRef.current) {
+          try {
+            rec.start();
+          } catch (err) {
+            console.warn('Speech recognition restart notice:', err);
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+        } else {
+          setIsListening(false);
+        }
+      };
+
+      recognitionRef.current = rec;
     }
   }, [lang, showActionFeedback]);
 
@@ -391,15 +414,21 @@ function SonuBhattiAppContent() {
     }
 
     if (isListening) {
-      recognitionRef.current.stop();
+      isListeningRef.current = false;
       setIsListening(false);
+      try {
+        recognitionRef.current.stop();
+      } catch {}
     } else {
       try {
-        recognitionRef.current.start();
+        isListeningRef.current = true;
         setIsListening(true);
+        recognitionRef.current.start();
         audioFeedback.play('click');
       } catch (err) {
         console.error('Failed to start recognition:', err);
+        isListeningRef.current = false;
+        setIsListening(false);
       }
     }
   }, [isListening, showActionFeedback]);
@@ -889,11 +918,51 @@ function SonuBhattiAppContent() {
       console.warn('Firestore Settings listener failed:', error);
     });
 
+    // 3. Listen for Orders changes
+    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+    const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
+      const allOrders: CustomerOrder[] = [];
+      snapshot.forEach((doc) => {
+        allOrders.push(doc.data() as CustomerOrder);
+      });
+      
+      if (allOrders.length > 0) {
+        // Update user's own orders if logged in
+        if (currentUser?.uid) {
+          setUserOrders(allOrders.filter(o => o.userUid === currentUser.uid));
+        }
+        // Admin view sync
+        setAllOrders(allOrders);
+        console.log(`Firestore Sync: ${allOrders.length} orders updated.`);
+      }
+    }, (error) => {
+      console.warn('Firestore Orders listener failed:', error);
+    });
+
+    // 4. Listen for Stock Movements (Admin only really, but listeners are global)
+    const movementsQuery = query(collection(db, 'movements'), orderBy('createdAt', 'desc'));
+    const unsubMovements = onSnapshot(movementsQuery, (snapshot) => {
+      const allMovements: StockMovement[] = [];
+      snapshot.forEach((doc) => {
+        allMovements.push(doc.data() as StockMovement);
+      });
+      
+      if (allMovements.length > 0) {
+        setStockMovements(allMovements);
+        writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, allMovements);
+        console.log(`Firestore Sync: ${allMovements.length} movements updated.`);
+      }
+    }, (error) => {
+      console.warn('Firestore Movements listener failed:', error);
+    });
+
     return () => {
       unsubProducts();
       unsubSettings();
+      unsubOrders();
+      unsubMovements();
     };
-  }, [isOnline]);
+  }, [isOnline, currentUser?.uid]);
 
   // Cart Handlers
   const addToCart = (product: Product) => {
@@ -1288,6 +1357,26 @@ function SonuBhattiAppContent() {
       }
     } catch {
       // Optimistic clear already applied
+    }
+  };
+
+  const handleUpdateOrderStatus = async (orderId: number, status: string) => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        showActionFeedback('Status Updated', `Order #${orderId} is now ${status}`, 'general', 'notification');
+        fetchAdminDashboard(authToken);
+      }
+    } catch (err) {
+      console.error('Failed to update order status', err);
     }
   };
 
@@ -1716,6 +1805,7 @@ function SonuBhattiAppContent() {
             admins={adminList}
             products={adminProducts}
             movements={stockMovements}
+            orders={allOrders}
             settings={settings}
             activeTab={adminTab}
             onTabChange={(tab) => handleNavigate('admin_dashboard', tab)}
@@ -1724,6 +1814,7 @@ function SonuBhattiAppContent() {
             offlineQueue={offlineQueue}
             isSyncing={isSyncing}
             onSyncNow={flushOfflineQueue}
+            onUpdateOrderStatus={handleUpdateOrderStatus}
             onLogout={async () => {
               if (isOnline && authToken) {
                 await fetch('/api/auth/logout', {

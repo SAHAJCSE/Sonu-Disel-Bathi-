@@ -59,6 +59,23 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "name", "role"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Log of inventory changes for audit trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "productId": { "type": "number" },
+        "productName": { "type": "string" },
+        "productSize": { "type": "string" },
+        "changeAmount": { "type": "number" },
+        "newQuantity": { "type": "number" },
+        "actionType": { "type": "string" },
+        "adminId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "productId", "productName", "changeAmount", "newQuantity", "actionType", "createdAt"]
     }
   },
   "firestore": {
@@ -77,6 +94,10 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Authenticated user profiles"
+    },
+    "/movements/{movementId}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Real-time stock audit movements"
     }
   }
 }

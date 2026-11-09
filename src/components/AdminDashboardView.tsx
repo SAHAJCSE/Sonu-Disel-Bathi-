@@ -4,6 +4,7 @@ import { Mic } from 'lucide-react';
 import {
   AdminProfile,
   BusinessSettings,
+  CustomerOrder,
   OfflineAction,
   Product,
   StockMovement,
@@ -18,13 +19,14 @@ interface AdminDashboardViewProps {
   admins: AdminProfile[];
   products: Product[];
   movements: StockMovement[];
+  orders: CustomerOrder[];
   settings: BusinessSettings;
   authToken: string;
   isOnline: boolean;
   offlineQueue: OfflineAction[];
   isSyncing: boolean;
-  activeTab: 'inventory' | 'smart_entry' | 'history' | 'settings';
-  onTabChange: (tab: 'inventory' | 'smart_entry' | 'history' | 'settings') => void;
+  activeTab: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings';
+  onTabChange: (tab: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings') => void;
   onSyncNow: () => void;
   onLogout: () => void;
   onCreateProduct: (data: {
@@ -62,12 +64,14 @@ interface AdminDashboardViewProps {
     name: string,
     newPassword?: string
   ) => Promise<void>;
+  onUpdateOrderStatus: (orderId: number, status: string) => Promise<void>;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentAdmin,
   products,
   movements,
+  orders,
   settings,
   authToken,
   isOnline,
@@ -81,6 +85,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onDeleteProduct,
   onDeleteAll,
   onUpdateSettings,
+  onUpdateOrderStatus,
   activeTab,
   onTabChange,
 }) => {
@@ -102,6 +107,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [businessNameInput, setBusinessNameInput] = useState(settings.businessName || 'SONU DIESEL BHATTI');
   const [whatsappInput, setWhatsappInput] = useState(settings.whatsappNumber || '918708381844');
   const [thresholdInput, setThresholdInput] = useState(String(settings.lowStockThreshold || 10));
+
+  // Sync settings when props change (from real-time Firestore updates)
+  React.useEffect(() => {
+    setBusinessNameInput(settings.businessName);
+    setWhatsappInput(settings.whatsappNumber);
+    setThresholdInput(String(settings.lowStockThreshold));
+  }, [settings]);
 
   const showTempMessage = (msg: string) => {
     setStatusMessage(msg);
@@ -641,6 +653,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => onTabChange('orders')}
+            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'orders'
+                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+            }`}
+          >
+            Orders ({orders.length})
+          </button>
+          <button
+            type="button"
             onClick={() => onTabChange('history')}
             className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'history'
@@ -819,6 +842,73 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'orders' && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden transition-colors">
+          {orders.length === 0 ? (
+            <div className="p-12 text-center text-xs font-mono text-zinc-500 dark:text-zinc-400">
+              No customer orders received yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/50">
+                    <th className="py-3 px-4">Order Info</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Total</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
+                  {orders.map((o) => (
+                    <tr key={o.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="font-bold text-zinc-950 dark:text-zinc-50">#{o.orderNumber}</div>
+                        <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                          {new Date(o.createdAt).toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-zinc-950 dark:text-zinc-50">{o.customerName}</div>
+                        <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">{o.customerPhone}</div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-zinc-950 dark:text-zinc-50">
+                        ₹{o.totalAmount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3 px-4">
+                        <select
+                          value={o.status}
+                          onChange={(e) => onUpdateOrderStatus(o.id, e.target.value)}
+                          className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-[11px] font-bold text-zinc-950 dark:text-zinc-50 focus:outline-none transition-colors cursor-pointer"
+                        >
+                          <option value="pending">PENDING</option>
+                          <option value="confirmed">CONFIRMED</option>
+                          <option value="processing">PROCESSING</option>
+                          <option value="dispatched">DISPATCHED</option>
+                          <option value="completed">COMPLETED</option>
+                          <option value="cancelled">CANCELLED</option>
+                        </select>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <a
+                          href={`https://wa.me/${o.customerPhone}?text=${encodeURIComponent(`Hello ${o.customerName}, about your order #${o.orderNumber}...`)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold"
+                        >
+                          WhatsApp
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
