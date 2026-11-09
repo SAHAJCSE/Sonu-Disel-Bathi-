@@ -1847,12 +1847,13 @@ function SonuBhattiAppContent() {
             {/* =============================================================== */}
             {/* HERO SECTION: OFFICIAL SONU DIESEL BHATTHI BANNER (BORDERLESS)  */}
             {/* =============================================================== */}
-            <section className="overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors">
-              <div className="w-full bg-white dark:bg-zinc-900 flex items-center justify-center px-3 py-4 sm:px-6 sm:py-6 transition-colors">
+            <section className="overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors relative">
+              <div className="absolute inset-0 bg-linear-to-tr from-stone-50/50 to-transparent dark:from-zinc-950/20 pointer-events-none" />
+              <div className="w-full bg-white dark:bg-zinc-900 flex items-center justify-center px-4 py-6 sm:px-10 sm:py-10 transition-colors relative">
                 <img
                   src={HERO_WORKSHOP_IMAGE}
                   alt={settings.businessName || t('brandName')}
-                  className="w-full max-w-2xl max-h-52 sm:max-h-68 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal dark:opacity-90"
+                  className="w-full max-w-2xl max-h-52 sm:max-h-72 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal dark:opacity-90 drop-shadow-2xl"
                 />
               </div>
             </section>
@@ -1881,8 +1882,10 @@ function SonuBhattiAppContent() {
                       type="button"
                       onClick={toggleVoiceSearch}
                       title={isListening ? 'Stop Listening' : 'Voice Search'}
-                      className={`p-1 rounded-md transition-colors cursor-pointer ${
-                        isListening ? 'bg-red-100 text-red-600 animate-pulse' : 'text-zinc-400 hover:text-[#00C1FD] hover:bg-zinc-100'
+                      className={`p-1.5 rounded-lg transition-all cursor-pointer shadow-xs active:scale-95 ${
+                        isListening 
+                          ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-500/20' 
+                          : 'bg-white dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 hover:text-[#00C1FD] hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800'
                       }`}
                     >
                       {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
@@ -2136,11 +2139,15 @@ function SonuBhattiAppContent() {
                           initial={{ opacity: 0, y: 6 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: 4 }}
+                          whileHover={{ 
+                            scale: 1.015,
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)"
+                          }}
                           transition={{
                             duration: 0.15,
                             ease: 'easeOut',
                           }}
-                          className="group bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5 shadow-sm cursor-pointer"
+                          className="group bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer"
                         >
                           <div>
                             {/* Product Image Inset Frame (4:3) */}

@@ -425,10 +425,10 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                 <ArrowLeft className="w-4 h-4 text-black dark:text-zinc-50" />
               </button>
               <div className="min-w-0">
-                <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-black dark:text-zinc-50 truncate flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-extrabold tracking-tight text-black dark:text-zinc-50 truncate flex items-center gap-2">
                   <span>{t('cartTitle')}</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 font-mono text-xs font-bold transition-colors">
-                    {cart.length} {cart.length === 1 ? 'Item' : 'Items'} ({totalUnits} Qty)
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 font-mono text-[10px] font-bold transition-colors shrink-0">
+                    {cart.length} {cart.length === 1 ? 'Item' : 'Items'}
                   </span>
                 </h2>
               </div>
@@ -528,13 +528,13 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                                 </span>
                               </div>
 
-                              <h4 className="text-base sm:text-lg font-extrabold text-black leading-snug break-words">
+                              <h4 className="text-sm sm:text-base font-extrabold text-black dark:text-zinc-50 leading-snug break-words">
                                 {product.name}
                               </h4>
 
-                              <div className="text-sm sm:text-base font-mono font-bold text-black dark:text-zinc-50 transition-colors">
+                              <div className="text-xs sm:text-sm font-mono font-bold text-black dark:text-zinc-50 transition-colors">
                                 Rs. {product.price.toLocaleString('en-IN')} × {quantity}{' '}
-                                <span className="font-extrabold">
+                                <span className="font-extrabold text-black dark:text-zinc-200">
                                   = Rs. {subtotal.toLocaleString('en-IN')}
                                 </span>
                               </div>
@@ -542,17 +542,17 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                           </div>
 
                           {/* Quantity Stepper & Remove */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800 shrink-0 transition-colors">
-                            <div className="inline-flex items-center gap-2 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 transition-colors">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800 shrink-0 transition-colors">
+                            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 transition-colors">
                               <button
                                 type="button"
                                 onClick={() => onUpdateQty(product.id, quantity - 1)}
                                 aria-label="Decrease quantity"
-                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 flex items-center justify-center cursor-pointer font-bold active:scale-95 transition-colors"
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-black dark:text-zinc-50 border border-zinc-300 dark:border-zinc-700 flex items-center justify-center cursor-pointer font-bold active:scale-95 transition-colors"
                               >
-                                <Minus className="w-4 h-4 text-black dark:text-zinc-50" />
+                                <Minus className="w-3.5 h-3.5 text-black dark:text-zinc-50" />
                               </button>
-                              <span className="w-8 text-center font-mono font-extrabold text-sm sm:text-base text-black dark:text-zinc-50">
+                              <span className="w-7 text-center font-mono font-extrabold text-xs sm:text-sm text-black dark:text-zinc-50">
                                 {quantity}
                               </span>
                               <button
@@ -560,9 +560,9 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                                 onClick={() => onUpdateQty(product.id, quantity + 1)}
                                 disabled={quantity >= product.stockQuantity}
                                 aria-label="Increase quantity"
-                                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-black hover:bg-zinc-800 text-white flex items-center justify-center cursor-pointer font-bold disabled:opacity-40 active:scale-95"
+                                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-black dark:bg-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-700 text-white dark:text-zinc-50 flex items-center justify-center cursor-pointer font-bold disabled:opacity-40 active:scale-95 transition-colors"
                               >
-                                <Plus className="w-4 h-4 text-white" />
+                                <Plus className="w-3.5 h-3.5" />
                               </button>
                             </div>
 
@@ -570,9 +570,9 @@ export const CartReceiptModal: React.FC<CartReceiptModalProps> = React.memo(({
                               type="button"
                               onClick={() => onRemoveItem(product.id)}
                               aria-label="Remove item"
-                              className="p-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-black dark:text-zinc-50 cursor-pointer transition-colors"
+                              className="p-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-black dark:text-zinc-50 cursor-pointer transition-colors"
                             >
-                              <Trash2 className="w-4 h-4 text-black dark:text-zinc-50" />
+                              <Trash2 className="w-3.5 h-3.5 text-black dark:text-zinc-50" />
                             </button>
                           </div>
                         </div>

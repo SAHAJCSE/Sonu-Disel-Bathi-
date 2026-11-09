@@ -553,7 +553,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 await onDeleteAll();
               }
             }}
-            className="px-3 py-1.5 rounded-md border border-red-300 dark:border-red-900 bg-white dark:bg-zinc-950 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 text-xs font-medium transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-600 dark:hover:bg-red-900 hover:text-white dark:hover:text-red-50 text-red-600 dark:text-red-400 text-xs font-bold transition-all cursor-pointer shadow-2xs"
           >
             Delete All
           </button>
@@ -581,47 +581,47 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {/* KPI Summary Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 sm:p-4 transition-colors shadow-sm">
+          <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Total Units
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {totalUnits}
           </div>
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{products.length} Models</span>
+          <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400">{products.length} Models</span>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 sm:p-4 transition-colors shadow-sm">
+          <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Inventory Value
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             ₹{totalValue.toLocaleString('en-IN')}
           </div>
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Total stock worth</span>
+          <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400">Total stock worth</span>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 sm:p-4 transition-colors shadow-sm">
+          <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Low Stock
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {lowStockCount}
           </div>
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400">
             Threshold ≤ {settings.lowStockThreshold || 10}
           </span>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md p-4 transition-colors">
-          <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 sm:p-4 transition-colors shadow-sm">
+          <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
             Out of Stock
           </span>
-          <div className="text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
+          <div className="text-xl sm:text-2xl font-bold font-mono text-zinc-950 dark:text-zinc-50 mt-1">
             {outOfStockCount}
           </div>
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Zero quantity</span>
+          <span className="text-[10px] sm:text-[11px] text-zinc-500 dark:text-zinc-400">Zero quantity</span>
         </div>
       </div>
 
@@ -864,47 +864,64 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
-                  {orders.map((o) => (
-                    <tr key={o.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-zinc-950 dark:text-zinc-50">#{o.orderNumber}</div>
-                        <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
-                          {new Date(o.createdAt).toLocaleString()}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-zinc-950 dark:text-zinc-50">{o.customerName}</div>
-                        <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">{o.customerPhone}</div>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-zinc-950 dark:text-zinc-50">
-                        ₹{o.totalAmount.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <select
-                          value={o.status}
-                          onChange={(e) => onUpdateOrderStatus(o.id, e.target.value)}
-                          className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-[11px] font-bold text-zinc-950 dark:text-zinc-50 focus:outline-none transition-colors cursor-pointer"
-                        >
-                          <option value="pending">PENDING</option>
-                          <option value="confirmed">CONFIRMED</option>
-                          <option value="processing">PROCESSING</option>
-                          <option value="dispatched">DISPATCHED</option>
-                          <option value="completed">COMPLETED</option>
-                          <option value="cancelled">CANCELLED</option>
-                        </select>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <a
-                          href={`https://wa.me/${o.customerPhone}?text=${encodeURIComponent(`Hello ${o.customerName}, about your order #${o.orderNumber}...`)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold"
-                        >
-                          WhatsApp
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
+                  {orders.map((o) => {
+                    const statusColors: Record<string, string> = {
+                      pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800',
+                      confirmed: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800',
+                      processing: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800',
+                      dispatched: 'bg-purple-100 text-indigo-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800',
+                      completed: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800',
+                      cancelled: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800',
+                    };
+                    const currentStatusColor = statusColors[o.status] || 'bg-zinc-100 text-zinc-700 border-zinc-200';
+
+                    return (
+                      <tr key={o.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-zinc-950 dark:text-zinc-50">#{o.orderNumber}</div>
+                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                            {new Date(o.createdAt).toLocaleString()}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-zinc-950 dark:text-zinc-50">{o.customerName}</div>
+                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">{o.customerPhone}</div>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-zinc-950 dark:text-zinc-50">
+                          ₹{o.totalAmount.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1.5">
+                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold border w-fit uppercase ${currentStatusColor}`}>
+                              {o.status}
+                            </span>
+                            <select
+                              value={o.status}
+                              onChange={(e) => onUpdateOrderStatus(o.id, e.target.value)}
+                              className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-zinc-950 dark:text-zinc-50 focus:outline-none transition-colors cursor-pointer w-fit"
+                            >
+                              <option value="pending">PENDING</option>
+                              <option value="confirmed">CONFIRMED</option>
+                              <option value="processing">PROCESSING</option>
+                              <option value="dispatched">DISPATCHED</option>
+                              <option value="completed">COMPLETED</option>
+                              <option value="cancelled">CANCELLED</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <a
+                            href={`https://wa.me/${o.customerPhone}?text=${encodeURIComponent(`Hello ${o.customerName}, about your order #${o.orderNumber}...`)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-colors inline-block"
+                          >
+                            WhatsApp
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

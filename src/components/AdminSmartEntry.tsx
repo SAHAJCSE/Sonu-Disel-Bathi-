@@ -791,10 +791,10 @@ export const AdminSmartEntry: React.FC<AdminSmartEntryProps> = ({
                   type="button"
                   disabled={isParsingVoice || !transcript.trim()}
                   onClick={() => parseVoiceCommand(transcript)}
-                  className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-lg bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 disabled:opacity-50 cursor-pointer shadow-sm active:scale-95 transition-all"
+                  className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-lg bg-zinc-900 text-white text-xs font-bold hover:bg-zinc-800 disabled:opacity-50 cursor-pointer shadow-sm active:scale-95 transition-all min-w-[130px]"
                 >
                   {isParsingVoice ? (
-                    <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                    <Sparkles className="w-3.5 h-3.5 animate-spin text-amber-400" />
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   )}
