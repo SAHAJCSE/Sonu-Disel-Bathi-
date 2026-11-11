@@ -4,7 +4,7 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
 import { requireAuth, requireAdmin, optionalAuth, AuthRequest } from './src/middleware/auth.ts';
 import { adminAuth } from './src/lib/firebase-admin.ts';
 import { db as clientDb } from './src/lib/firebase.ts';
@@ -1157,6 +1157,9 @@ Rules:
 2. If the command refers to a size like "Medium", "Large", "Small", or "Extra Large" and multiple existing products have that size (without clarifying which specific model name), put all matching product IDs in "ambiguousProductIds" and set "isAmbiguous" to true so the admin can select the exact product.
 3. Extract product name (e.g. "16x36 Diesel Bhatti" or "Diesel Bhatti"), size ("Small", "Medium", "Large", "Extra Large", or specific dimensions like "16x36"), price (integer INR), stockActionType ("ADD", "REMOVE", "ADJUST"), and stockAmount (integer). For commands like "10 bathi 16 36 2500₹ ki hai", interpret quantity=10, size="16x36", price=2500, intent="CREATE_PRODUCT".`,
           config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.LOW,
+            },
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -1208,7 +1211,7 @@ Rules:
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI parse timeout')), 8000)
+          setTimeout(() => reject(new Error('AI parse timeout')), 20000)
         );
 
         const response: any = await Promise.race([geminiCall, timeoutPromise]);
@@ -1370,6 +1373,9 @@ Instructions:
         ],
       },
       config: {
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.LOW,
+        },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,

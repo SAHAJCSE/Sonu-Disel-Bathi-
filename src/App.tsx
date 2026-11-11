@@ -1538,6 +1538,7 @@ function SonuBhattiAppContent() {
     debouncedSearchQuery.trim() !== '' ||
     selectedSize !== 'ALL' ||
     maxPriceLimit !== null ||
+    showFavouritesOnly ||
     sortBy !== 'FEATURED';
 
   const resetAllCatalogueFilters = useCallback(() => {
@@ -1545,6 +1546,7 @@ function SonuBhattiAppContent() {
     flushSearchNow('');
     setSelectedSize('ALL');
     setMaxPriceLimit(null);
+    setShowFavouritesOnly(false);
     setSortBy('FEATURED');
   }, [flushSearchNow]);
 
@@ -1776,14 +1778,15 @@ function SonuBhattiAppContent() {
                 </div>
               </div>
 
-              {/* Row 2 & 3: Compact Dropdown Filters */}
-              <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                <div className="relative flex-1 min-w-[140px]">
+              {/* Row 2: Filters & Options */}
+              <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                {/* Size Selector */}
+                <div className="relative flex-1 min-w-[130px]">
                   <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
                   <select
                     value={selectedSize}
                     onChange={(e) => setSelectedSize(e.target.value)}
-                    className="w-full pl-9 pr-8 py-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all cursor-pointer appearance-none shadow-xs"
+                    className="w-full pl-9 pr-8 py-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all cursor-pointer appearance-none shadow-xs"
                   >
                     <option value="ALL">{t('filterAllSizes')} ({getSizeCount('ALL')})</option>
                     {['Small', 'Medium', 'Large', 'Extra Large'].map((sz) => (
@@ -1797,15 +1800,47 @@ function SonuBhattiAppContent() {
                   </div>
                 </div>
 
+                {/* Sort Selector */}
+                <div className="relative flex-1 min-w-[130px]">
+                  <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="w-full pl-9 pr-8 py-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all cursor-pointer appearance-none shadow-xs"
+                  >
+                    <option value="FEATURED">{t('sortFeatured')}</option>
+                    <option value="PRICE_ASC">{t('sortPriceAsc')}</option>
+                    <option value="PRICE_DESC">{t('sortPriceDesc')}</option>
+                    <option value="STOCK_DESC">{t('sortStockDesc')}</option>
+                    <option value="NAME_ASC">{t('sortNameAsc')}</option>
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ChevronRight className="w-4 h-4 text-zinc-400 rotate-90" />
+                  </div>
                 </div>
+
+                {/* Favourites Only Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowFavouritesOnly((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                    showFavouritesOnly
+                      ? 'bg-red-500 text-white border-red-500 shadow-sm'
+                      : 'bg-stone-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400'
+                  }`}
+                >
+                  <Heart className={`w-3.5 h-3.5 ${showFavouritesOnly ? 'fill-white' : ''}`} />
+                  <span>Favourites ({favourites.length})</span>
+                </button>
+              </div>
             </section>
 
             {/* =============================================================== */}
             {/* DYNAMIC PRODUCT GRID / LIST DISPLAY                             */}
             {/* =============================================================== */}
-            <section id="catalogue-grid" className="scroll-mt-32 min-h-[400px]">
+            <div id="catalogue-grid" className="scroll-mt-32 min-h-[400px]">
               {filteredProducts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl transition-colors">
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl transition-colors">
                   <div className="w-16 h-16 rounded-full bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
                     <Search className="w-8 h-8 text-zinc-300" />
                   </div>
@@ -1814,13 +1849,13 @@ function SonuBhattiAppContent() {
                       {t('noProductsFound')}
                     </h3>
                     <p className="text-xs text-zinc-500">
-                      Try adjusting your filters or search terms.
+                      Try adjusting your filters, budget, or search terms.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={resetAllCatalogueFilters}
-                    className="px-5 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold transition-all hover:bg-zinc-800 active:scale-95 cursor-pointer"
+                    className="px-5 py-2 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
                   >
                     {t('resetFilters')}
                   </button>
@@ -1833,79 +1868,99 @@ function SonuBhattiAppContent() {
                       : 'grid-cols-1 max-w-2xl mx-auto'
                   }`}
                 >
-
                   {filteredProducts.map((product) => {
-                      const cartEntry = cart.find(
-                        (c) => c.product.id === product.id
-                      );
-                      const outOfStock = product.stockQuantity <= 0;
+                    const outOfStock = product.stockQuantity <= 0;
+                    const isFav = favourites.includes(product.id);
 
-                      return (
-                        <motion.article
-                          key={product.id}
-                          layout
-                          initial={{ opacity: 0, scale: 0.98 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.98 }}
-                          transition={{ duration: 0.2 }}
-                          whileHover={{ scale: 1.02 }}
-                          onClick={() => setInspectedProduct(product)}
-                          className="group bg-zinc-900 rounded-3xl p-3 border border-zinc-800 flex flex-col shadow-xl cursor-pointer"
-                        >
-                          {/* Image Container */}
-                          <div className="relative aspect-square bg-zinc-800 rounded-2xl overflow-hidden mb-3">
-                            <ProductImage
-                              src={product.imageUrl}
-                              alt={product.name}
-                              sizeLabel={product.size}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    return (
+                      <motion.article
+                        key={product.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                        whileHover={{ y: -3 }}
+                        onClick={() => setInspectedProduct(product)}
+                        className="group bg-[#18181b] rounded-[28px] p-3.5 border border-zinc-800/80 flex flex-col shadow-xl hover:shadow-2xl cursor-pointer transition-all duration-300"
+                      >
+                        {/* Image Container with Apple-style rounded light background & heart button */}
+                        <div className="relative aspect-square bg-[#f4f4f5] dark:bg-zinc-800/90 rounded-[22px] overflow-hidden mb-3.5 flex items-center justify-center p-3">
+                          <ProductImage
+                            src={product.imageUrl}
+                            alt={product.name}
+                            sizeLabel={product.size}
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                          />
+
+                          {/* Favourite Heart Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFavourites((prev) =>
+                                isFav
+                                  ? prev.filter((id) => id !== product.id)
+                                  : [...prev, product.id]
+                              );
+                              showActionFeedback(
+                                isFav ? 'Removed from Favourites' : 'Added to Favourites',
+                                product.name,
+                                'general',
+                                'favorite'
+                              );
+                            }}
+                            className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all shadow-md z-10"
+                            aria-label="Toggle favourite"
+                          >
+                            <Heart
+                              className={`w-4 h-4 transition-colors ${
+                                isFav ? 'fill-red-500 text-red-500' : 'text-white'
+                              }`}
                             />
-                            
-                            {/* Favourite Button (Heart) */}
+                          </button>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="flex flex-col flex-1 px-1">
+                          <h3 className="text-sm sm:text-base font-bold text-white line-clamp-1 tracking-tight">
+                            {product.name}
+                          </h3>
+                          <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
+                            {product.size} • {product.burnerType || 'Commercial Burner'}
+                          </p>
+
+                          {/* Price and Cart Button */}
+                          <div className="mt-3.5 pt-1 flex items-center justify-between">
+                            <div>
+                              <span className="text-lg sm:text-xl font-black text-white tracking-tight">
+                                ₹{product.price.toLocaleString('en-IN')}
+                              </span>
+                            </div>
+
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setFavourites((prev) =>
-                                  prev.includes(product.id)
-                                    ? prev.filter((id) => id !== product.id)
-                                    : [...prev, product.id]
-                                );
+                                addToCart(product);
                               }}
-                              className="absolute top-3 right-3 p-2 bg-zinc-900/50 backdrop-blur-sm rounded-full text-white hover:text-red-500 transition-colors"
+                              disabled={outOfStock}
+                              aria-label={outOfStock ? 'Out of stock' : 'Add to cart'}
+                              className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shadow-md ${
+                                outOfStock
+                                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                  : 'bg-white text-zinc-950 hover:bg-zinc-100 active:scale-95 cursor-pointer'
+                              }`}
                             >
-                              <Heart className={`w-5 h-5 ${favourites.includes(product.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                              <ShoppingBag className="w-5 h-5" />
                             </button>
                           </div>
-                            
-                          {/* Content Area */}
-                          <div className="flex flex-col flex-1 px-1">
-                            <h3 className="text-sm font-bold text-white line-clamp-1">
-                              {product.name}
-                            </h3>
-                            <p className="text-xs text-zinc-400 mb-4">{product.size}</p>
-                            
-                            {/* Price and Cart Button */}
-                            <div className="mt-auto flex items-center justify-between">
-                              <span className="text-xl font-black text-white">
-                                {product.price}$
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  addToCart(product);
-                                }}
-                                disabled={outOfStock}
-                                className={`p-3 rounded-2xl ${outOfStock ? 'bg-zinc-800 text-zinc-500' : 'bg-white text-zinc-900'} transition-colors`}
-                              >
-                                <ShoppingBag className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </div>
-                        </motion.article>
-                    })}
-                  </div>
+                        </div>
+                      </motion.article>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}

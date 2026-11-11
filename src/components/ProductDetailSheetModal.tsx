@@ -312,11 +312,19 @@ export const ProductDetailSheetModal: React.FC<
                 <button
                   type="button"
                   onClick={() => {
+                    const shareData = {
+                      title: product.name,
+                      text: `Check out ${product.name} at Sonu Diesel Bhatti!`,
+                      url: window.location.href,
+                    };
                     if (navigator.share) {
-                      navigator.share({ title: product.name, text: `Check out ${product.name}!`, url: window.location.href }).catch(() => {});
+                      navigator.share(shareData).catch(() => {});
+                    } else if (navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.href);
                     }
                   }}
-                  className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors flex items-center justify-center"
+                  className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors flex items-center justify-center cursor-pointer"
+                  title="Share product"
                 >
                   <Share2 className="w-4 h-4" />
                 </button>
