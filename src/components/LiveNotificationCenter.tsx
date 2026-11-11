@@ -115,7 +115,9 @@ export const LiveNotificationCenter: React.FC<LiveNotificationCenterProps> = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onDismiss(notif.id);
+                        if (window.confirm('Dismiss this notification?')) {
+                          onDismiss(notif.id);
+                        }
                       }}
                       className="absolute top-3 right-3 p-1 opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-all cursor-pointer"
                       title="Dismiss"

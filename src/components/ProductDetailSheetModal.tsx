@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BusinessSettings, CartItem, Product } from '../types.ts';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
 import { ProductImage } from './ProductImage.tsx';
+import { Share2 } from 'lucide-react';
 
 interface ProductDetailSheetModalProps {
   product: Product | null;
@@ -102,15 +103,15 @@ export const ProductDetailSheetModal: React.FC<
     },
     {
       label: 'Burner Type',
-      value: getBurnerConfig(product.name, product.size),
+      value: product.burnerType || getBurnerConfig(product.name, product.size),
     },
     {
       label: 'Material',
-      value: 'Heavy-Gauge Commercial Steel',
+      value: product.material || 'Heavy-Gauge Commercial Steel',
     },
     {
       label: 'Fuel',
-      value: 'Pressurized Diesel / Kerosene',
+      value: product.fuelType || 'Pressurized Diesel / Kerosene',
     },
     {
       label: 'Availability',
@@ -291,7 +292,7 @@ export const ProductDetailSheetModal: React.FC<
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-3 gap-2.5 pt-4 border-t border-zinc-200 dark:border-zinc-800 transition-colors">
+              <div className="grid grid-cols-4 gap-2.5 pt-4 border-t border-zinc-200 dark:border-zinc-800 transition-colors">
                 <a
                   href={`tel:+${cleanPhone}`}
                   className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors"
@@ -310,11 +311,23 @@ export const ProductDetailSheetModal: React.FC<
 
                 <button
                   type="button"
+                  onClick={() => {
+                    if (navigator.share) {
+                      navigator.share({ title: product.name, text: `Check out ${product.name}!`, url: window.location.href }).catch(() => {});
+                    }
+                  }}
+                  className="py-3 px-3 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium text-center transition-colors flex items-center justify-center"
+                >
+                  <Share2 className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
                   disabled={outOfStock}
                   onClick={() => onAddToCart(product)}
-                  className="py-3 px-3 rounded-md bg-zinc-950 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-100 dark:disabled:bg-zinc-800 disabled:text-zinc-400 text-white dark:text-zinc-900 text-xs font-medium transition-colors cursor-pointer"
+                  className="py-3 px-3 rounded-md bg-zinc-950 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:bg-zinc-100 dark:disabled:bg-zinc-800 disabled:text-zinc-400 text-white dark:text-zinc-900 text-xs font-black uppercase tracking-tighter transition-colors cursor-pointer"
                 >
-                  {cartEntry ? `In Cart (${cartEntry.quantity})` : 'Add to Cart'}
+                  {cartEntry ? `In Cart (${cartEntry.quantity})` : 'Add'}
                 </button>
               </div>
             </div>

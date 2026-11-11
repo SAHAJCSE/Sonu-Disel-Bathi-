@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { Mic } from 'lucide-react';
+import { Mic, Plus, Check, Save, Package, ShoppingCart, History, Settings as SettingsIcon, Sparkles, Search } from 'lucide-react';
 import {
   AdminProfile,
   BusinessSettings,
@@ -498,14 +498,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <button
             type="button"
             onClick={handleExportInventoryPdf}
-            className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-bold transition-all shadow-xs hover:shadow-sm active:scale-95 cursor-pointer"
           >
             Export Inventory PDF
           </button>
           <button
             type="button"
             onClick={handleExportMovementsPdf}
-            className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-medium transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-950 dark:text-zinc-50 text-xs font-bold transition-all shadow-xs hover:shadow-sm active:scale-95 cursor-pointer"
           >
             Export History PDF
           </button>
@@ -522,9 +522,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           <button
             type="button"
             onClick={() => onTabChange('smart_entry')}
-            className="px-3.5 py-1.5 rounded-md border border-amber-500/40 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            className="px-5 py-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-900 dark:text-amber-200 text-sm font-bold transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer flex items-center gap-2"
           >
-            <Mic className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <Mic className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <span>Voice Add</span>
           </button>
           <button
@@ -540,9 +540,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 isActive: true,
               });
             }}
-            className="px-3.5 py-1.5 rounded-md bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-medium transition-colors cursor-pointer"
+            className="px-6 py-3 rounded-2xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-sm font-bold transition-all shadow-md hover:shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
           >
-            + Add Product
+            <Plus className="w-4 h-4" />
+            <span>Add Product</span>
           </button>
           <button
             type="button"
@@ -553,7 +554,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 await onDeleteAll();
               }
             }}
-            className="px-3 py-1.5 rounded-md border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 hover:bg-red-600 dark:hover:bg-red-900 hover:text-white dark:hover:text-red-50 text-red-600 dark:text-red-400 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            className="px-4 py-3 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 hover:bg-red-600 dark:hover:bg-red-900 hover:text-white text-red-600 dark:text-red-400 text-sm font-bold transition-all shadow-sm hover:shadow-md active:scale-95 cursor-pointer"
           >
             Delete All
           </button>
@@ -625,96 +626,113 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Navigation Tabs & Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap bg-zinc-100 dark:bg-zinc-900 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 w-fit transition-colors">
+      {/* Navigation Tabs - Clean block */}
+      <div className="bg-zinc-50 dark:bg-zinc-900/50 p-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
           <button
             type="button"
             onClick={() => onTabChange('inventory')}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'inventory'
-                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+                ? 'bg-white dark:bg-zinc-800 shadow-md text-zinc-950 dark:text-zinc-50'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
-            Inventory ({products.length})
+            <Package className={`w-5 h-5 ${activeTab === 'inventory' ? 'text-zinc-950 dark:text-zinc-50' : 'text-zinc-400'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Inventory ({products.length})</span>
           </button>
+
           <button
             type="button"
             onClick={() => onTabChange('smart_entry')}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'smart_entry'
-                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+                ? 'bg-white dark:bg-zinc-800 shadow-md text-zinc-950 dark:text-zinc-50'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
-            <Mic className="w-3.5 h-3.5 text-amber-500" />
-            <span>Voice & Smart Entry</span>
+            <Sparkles className={`w-5 h-5 ${activeTab === 'smart_entry' ? 'text-amber-500' : 'text-zinc-400'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider leading-none">Smart Entry</span>
           </button>
+
           <button
             type="button"
             onClick={() => onTabChange('orders')}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'orders'
-                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+                ? 'bg-white dark:bg-zinc-800 shadow-md text-zinc-950 dark:text-zinc-50'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
-            Orders ({orders.length})
+            <ShoppingCart className={`w-5 h-5 ${activeTab === 'orders' ? 'text-emerald-500' : 'text-zinc-400'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Orders ({orders.length})</span>
           </button>
+
           <button
             type="button"
             onClick={() => onTabChange('history')}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+                ? 'bg-white dark:bg-zinc-800 shadow-md text-zinc-950 dark:text-zinc-50'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
-            Stock History ({movements.length})
+            <History className={`w-5 h-5 ${activeTab === 'history' ? 'text-blue-500' : 'text-zinc-400'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider leading-none">History ({movements.length})</span>
           </button>
+
           <button
             type="button"
             onClick={() => onTabChange('settings')}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition-colors cursor-pointer ${
+            className={`flex flex-col items-center justify-center gap-2 py-4 px-3 rounded-xl transition-all cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-zinc-950 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-200'
+                ? 'bg-white dark:bg-zinc-800 shadow-md text-zinc-950 dark:text-zinc-50'
+                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
             }`}
           >
-            Settings
+            <SettingsIcon className={`w-5 h-5 ${activeTab === 'settings' ? 'text-zinc-950 dark:text-zinc-50' : 'text-zinc-400'}`} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Settings</span>
           </button>
         </div>
+      </div>
 
-        {activeTab === 'inventory' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter models..."
-              className="w-full sm:w-64 px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-xs text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-50 transition-colors"
-            />
-            <button
-              type="button"
-              onClick={handleExportInventoryPdf}
-              className="px-3 py-1.5 rounded-md bg-zinc-950 text-white text-xs font-medium hover:bg-zinc-800 cursor-pointer whitespace-nowrap"
-            >
-              Download PDF
-            </button>
+        {/* Sub-bar for Search/Actions within tabs if needed */}
+        {(activeTab === 'inventory' || activeTab === 'history') && (
+          <div className="px-4 py-3 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {activeTab === 'inventory' ? (
+              <>
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by name or size..."
+                    className="w-full pl-10 pr-3 py-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-4 focus:ring-zinc-900/5 transition-all shadow-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportInventoryPdf}
+                  className="px-4 py-2 rounded-xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-xs font-bold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                >
+                  Download Inventory PDF
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center justify-between w-full">
+                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Recent Activity Log</span>
+                <button
+                  type="button"
+                  onClick={handleExportMovementsPdf}
+                  className="px-4 py-2 rounded-xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-xs font-bold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-all shadow-sm cursor-pointer"
+                >
+                  Download History PDF
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        {activeTab === 'history' && (
-          <button
-            type="button"
-            onClick={handleExportMovementsPdf}
-            className="px-3.5 py-1.5 rounded-md bg-zinc-950 text-white text-xs font-medium hover:bg-zinc-800 cursor-pointer w-fit"
-          >
-            Download Stock History PDF
-          </button>
-        )}
-      </div>
 
       {/* Tab Content */}
       {activeTab === 'inventory' && (
@@ -823,14 +841,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               setIsCreating(false);
                               setEditingProduct({ ...product });
                             }}
-                            className="px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-xs font-medium text-zinc-950 dark:text-zinc-50 cursor-pointer transition-colors"
+                            className="px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-bold text-zinc-900 dark:text-zinc-100 cursor-pointer transition-colors"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
-                            onClick={() => onDeleteProduct(product.id)}
-                            className="px-2.5 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-950 dark:hover:bg-zinc-50 hover:text-white dark:hover:text-zinc-950 text-xs font-medium transition-colors cursor-pointer"
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete "${product.name}"? This cannot be undone.`)) {
+                                onDeleteProduct(product.id);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded border border-red-200 dark:border-red-900/50 bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer"
                           >
                             Delete
                           </button>
@@ -1101,7 +1123,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setStockModalProduct(null)}
-                  className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-950 dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
+                  className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
@@ -1264,15 +1286,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-3.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-medium text-zinc-950 dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
+                  className="px-3.5 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-md bg-zinc-950 text-white text-xs font-medium cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-sm font-bold shadow-md hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer"
                 >
-                  {isCreating ? 'Create' : 'Save Changes'}
+                  {isCreating ? 'Create Product' : 'Save Changes'}
                 </button>
               </div>
             </form>

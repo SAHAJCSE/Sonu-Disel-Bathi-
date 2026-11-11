@@ -33,12 +33,16 @@ import {
   Grid2x2,
   Volume2,
   VolumeX,
+  Wallet,
+  Share2,
+  Heart,
   Lock,
   Mic,
   MicOff,
   MessageCircle,
   Sun,
   Moon,
+  Settings,
 } from 'lucide-react';
 import {
   AdminProfile,
@@ -63,14 +67,19 @@ import { AdminDashboardView } from './components/AdminDashboardView.tsx';
 import { ProductDetailSheetModal } from './components/ProductDetailSheetModal.tsx';
 import { LiveNotificationCenter } from './components/LiveNotificationCenter.tsx';
 import { AuthProfileHeader } from './components/AuthProfileHeader.tsx';
-import { CustomerOrdersModal } from './components/CustomerOrdersModal.tsx';
+import { SettingsPopup } from './components/SettingsPopup.tsx';
 import { ActionFeedbackToast, ActionToastData } from './components/ActionFeedbackToast.tsx';
 import { audioFeedback } from './utils/audioFeedback.ts';
 import { useDebounce } from './hooks/useDebounce.ts';
 import { ProductStructuredData } from './components/ProductStructuredData.tsx';
+import { WelcomePage } from './components/WelcomePage.tsx';
+import { AuthPage } from './components/AuthPage.tsx';
+import { ProductSkeleton } from './components/ProductSkeleton.tsx';
 
 const HERO_WORKSHOP_IMAGE =
-  '/assets/aistudio/file_000000002dd0820880291fbff7e224d7_1dfe8205.png';
+  '/assets/aistudio/2a699790a8a58fccc2585b7051c3cd969c0efb91b5c7046a8963907a3f01ad54.png';
+const HERO_DARK_IMAGE =
+  '/assets/aistudio/file_00000000e6208208bb56f2c619997a8a_8a27068f.png';
 
 const INITIAL_FALLBACK_PRODUCTS: Product[] = [
   {
@@ -199,7 +208,11 @@ function SonuBhattiAppContent() {
       setViewHistory((prev) => [...prev, { mode: viewMode, tab: adminTab }]);
       setViewMode(newMode);
       if (newTab) setAdminTab(newTab);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
+      // Fix: Only scroll if NOT switching tabs within admin panel
+      if (newMode !== 'admin_dashboard') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     },
     [viewMode, adminTab]
   );
@@ -231,6 +244,7 @@ function SonuBhattiAppContent() {
   const [syncToast, setSyncToast] = useState<string | null>(null);
 
   // Public Catalogue State
+  const [isFetching, setIsFetching] = useState(true);
   const [publicProducts, setPublicProducts] = useState<Product[]>(() =>
     readCache<Product[]>(CACHE_KEYS.PUBLIC_PRODUCTS, INITIAL_FALLBACK_PRODUCTS)
   );
@@ -244,17 +258,30 @@ function SonuBhattiAppContent() {
     flushNow: flushSearchNow,
   } = useDebounce(searchQuery, 220);
   const [selectedSize, setSelectedSize] = useState<string>('ALL');
-  const [priceFilter, setPriceFilter] = useState<
-    'ALL' | 'UNDER_2500' | '2500_TO_4000' | 'ABOVE_4000'
-  >('ALL');
   const [maxPriceLimit, setMaxPriceLimit] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<
     'FEATURED' | 'PRICE_ASC' | 'PRICE_DESC' | 'STOCK_DESC' | 'NAME_ASC'
   >('FEATURED');
   const [gridCols, setGridCols] = useState<'auto' | 1 | 2 | 3 | 4>('auto');
+  const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [favourites, setFavourites] = useState<number[]>(() =>
+    readCache<number[]>('sdb_favourites', [])
+  );
   const [inspectedProduct, setInspectedProduct] = useState<Product | null>(
     null
   );
+  
+  const [appState, setAppState] = useState<'welcome' | 'auth' | 'main'>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const shown = localStorage.getItem('sdb_welcome_shown');
+      return shown ? 'auth' : 'welcome';
+    }
+    return 'welcome';
+  });
+
+  useEffect(() => {
+    writeCache('sdb_favourites', favourites);
+  }, [favourites]);
 
   // Shopping Cart & Receipt Modal State
   const [cart, setCart] = useState<CartItem[]>(() =>
@@ -283,9 +310,8 @@ function SonuBhattiAppContent() {
     readCache<UserProfile | null>('sonu_bhatti_current_user', null)
   );
   const [notifications, setNotifications] = useState<LiveNotification[]>([]);
-  const [userOrders, setUserOrders] = useState<CustomerOrder[]>([]);
   const [allOrders, setAllOrders] = useState<CustomerOrder[]>([]);
-  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [liveToast, setLiveToast] = useState<{
     title: string;
     message: string;
@@ -303,7 +329,7 @@ function SonuBhattiAppContent() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sdb_theme');
       if (saved === 'light' || saved === 'dark') return saved;
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      return 'light';
     }
     return 'light';
   });
@@ -491,6 +517,7 @@ function SonuBhattiAppContent() {
 
   // Fetch Public Catalogue
   const fetchPublicCatalogue = useCallback(async () => {
+    setIsFetching(true);
     try {
       const res = await fetch(`/api/public/catalogue?t=${Date.now()}`, {
         cache: 'no-store'
@@ -507,6 +534,8 @@ function SonuBhattiAppContent() {
       }
     } catch {
       // Offline mode uses cached state
+    } finally {
+      setIsFetching(false);
     }
   }, []);
 
@@ -622,21 +651,7 @@ function SonuBhattiAppContent() {
   }, []);
 
   const fetchUserOrders = useCallback(async (tokenToUse?: string | null) => {
-    const token = tokenToUse ?? authTokenRef.current;
-    if (!token) return;
-    try {
-      const res = await fetch('/api/user/orders', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.orders) {
-          setUserOrders(data.orders);
-        }
-      }
-    } catch {
-      // offline fallback
-    }
+    // Orders page removed
   }, []);
 
   const handleMarkNotificationRead = async (id: number) => {
@@ -682,7 +697,6 @@ function SonuBhattiAppContent() {
     setAuthToken(null);
     setCurrentUser(null);
     setCurrentAdmin(null);
-    setUserOrders([]);
     localStorage.removeItem(CACHE_KEYS.ADMIN_SESSION);
     localStorage.removeItem('sonu_bhatti_current_user');
     handleNavigate('public');
@@ -754,7 +768,7 @@ function SonuBhattiAppContent() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [fetchPublicCatalogue, fetchAdminDashboard, flushOfflineQueue, fetchNotifications, fetchUserOrders]);
+  }, [fetchPublicCatalogue, fetchAdminDashboard, flushOfflineQueue, fetchNotifications]);
 
   // Real-Time Server-Sent Events (SSE) for instant Two-Admin Synchronization & Live Notifications
   useEffect(() => {
@@ -880,7 +894,7 @@ function SonuBhattiAppContent() {
       if (eventSource) eventSource.close();
       if (retryTimeout) window.clearTimeout(retryTimeout);
     };
-  }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard, fetchNotifications, fetchUserOrders]);
+  }, [isOnline, fetchPublicCatalogue, fetchAdminDashboard, fetchNotifications]);
 
   // Real-time Firestore Sync (Guarantees parity across all devices and tabs)
   useEffect(() => {
@@ -931,10 +945,6 @@ function SonuBhattiAppContent() {
       });
       
       if (allOrders.length > 0) {
-        // Update user's own orders if logged in
-        if (currentUser?.uid) {
-          setUserOrders(allOrders.filter(o => o.userUid === currentUser.uid));
-        }
         // Admin view sync
         setAllOrders(allOrders);
         console.log(`Firestore Sync: ${allOrders.length} orders updated.`);
@@ -997,7 +1007,7 @@ function SonuBhattiAppContent() {
       return;
     }
     const currentItem = cart.find((i) => i.product.id === productId);
-    if (currentItem) {
+    if (currentItem && !isCartOpen) {
       if (newQty > currentItem.quantity) {
         audioFeedback.play('add_to_cart');
         showActionFeedback(
@@ -1310,7 +1320,7 @@ function SonuBhattiAppContent() {
       `Product #${productId} removed from catalogue`,
       'product_delete'
     );
-    // 1. Instant optimistic removal from Admin, Public, and Cart states
+    // 1. Optimistic removal
     setAdminProducts((prev) => {
       const updated = prev.filter((p) => p.id !== productId);
       writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
@@ -1321,70 +1331,52 @@ function SonuBhattiAppContent() {
       writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, updated);
       return updated;
     });
-    setCart((prev) => prev.filter((item) => item.product.id !== productId));
 
-    if (!isOnline || !authToken) return;
-    try {
-      const res = await fetch(`/api/admin/products/${productId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (res.ok) {
+    if (isOnline && authToken) {
+      try {
+        await fetch(`/api/admin/products/${productId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
         void fetchAdminDashboard(authToken);
         void fetchPublicCatalogue();
+        return;
+      } catch {
+        // offline queue
       }
-    } catch {
-      // Optimistic removal already applied
     }
+
+    enqueueOfflineAction('DELETE_PRODUCT', { productId }, `Delete product #${productId}`);
   };
 
   const handleDeleteAll = async () => {
-    // 1. Instant optimistic clear
-    setAdminProducts([]);
-    setPublicProducts([]);
-    setCart([]);
-    setStockMovements([]);
-    writeCache(CACHE_KEYS.ADMIN_PRODUCTS, []);
-    writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, []);
-    writeCache(CACHE_KEYS.CART, []);
-    writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, []);
-
-    if (!isOnline || !authToken) return;
-    try {
-      const res = await fetch('/api/admin/products', {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (res.ok) {
+    if (isOnline && authToken) {
+      try {
+        await fetch('/api/admin/products/delete-all', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        setAdminProducts([]);
+        setPublicProducts([]);
+        setStockMovements([]);
+        writeCache(CACHE_KEYS.ADMIN_PRODUCTS, []);
+        writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, []);
+        writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, []);
         void fetchAdminDashboard(authToken);
         void fetchPublicCatalogue();
+      } catch {
+        alert('Could not clear catalogue while offline.');
       }
-    } catch {
-      // Optimistic clear already applied
-    }
-  };
-
-  const handleUpdateOrderStatus = async (orderId: number, status: string) => {
-    if (!authToken) return;
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        showActionFeedback('Status Updated', `Order #${orderId} is now ${status}`, 'general', 'notification');
-        fetchAdminDashboard(authToken);
-      }
-    } catch (err) {
-      console.error('Failed to update order status', err);
+    } else {
+      alert('Could not clear catalogue while offline.');
     }
   };
 
   const handleUpdateSettings = async (data: Partial<BusinessSettings>) => {
+    // 1. Optimistic settings update
+    setSettings((prev) => ({ ...prev, ...data }));
+    writeCache(CACHE_KEYS.SETTINGS, { ...settings, ...data });
+
     if (isOnline && authToken) {
       try {
         const res = await fetch('/api/admin/settings', {
@@ -1396,21 +1388,16 @@ function SonuBhattiAppContent() {
           body: JSON.stringify(data),
         });
         if (res.ok) {
-          const json = await res.json();
-          if (json.settings) {
-            setSettings(json.settings);
-            writeCache(CACHE_KEYS.SETTINGS, json.settings);
-          }
+          void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
         }
       } catch {
-        // Fall through to offline queue
+        // offline queue
       }
     }
 
-    enqueueOfflineAction('UPDATE_SETTINGS', data, 'Update Business Settings');
-    setSettings((prev) => ({ ...prev, ...data }));
+    enqueueOfflineAction('UPDATE_SETTINGS', data, 'Update business settings');
   };
 
   const handleUpdateAdminProfile = async (
@@ -1419,35 +1406,58 @@ function SonuBhattiAppContent() {
     name: string,
     newPassword?: string
   ) => {
-    if (!isOnline || !authToken) return;
-    const res = await fetch(`/api/admin/profile/${adminId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({ email, name, newPassword }),
-    });
-    if (res.ok) {
-      await fetchAdminDashboard(authToken);
+    if (isOnline && authToken) {
+      try {
+        const res = await fetch(`/api/admin/profiles/${adminId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ email, name, newPassword }),
+        });
+        if (res.ok) {
+          void fetchAdminDashboard(authToken);
+          showActionFeedback('Profile Updated', 'Admin credentials changed', 'general');
+        }
+      } catch {
+        alert('Cannot update profile while offline.');
+      }
     }
   };
 
-  // Active Public Products & Memoized Per-Size and Per-Price Counts
-  const activePublicProducts = useMemo(
-    () => publicProducts.filter((p) => p.isActive),
-    [publicProducts]
-  );
+  const handleUpdateOrderStatus = async (orderId: number, status: string) => {
+    if (isOnline && authToken) {
+      try {
+        const res = await fetch(`/api/admin/orders/${orderId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ status }),
+        });
+        if (res.ok) {
+          void fetchAdminDashboard(authToken);
+          showActionFeedback('Order Updated', `Status changed to ${status}`, 'general');
+        }
+      } catch {
+        // No offline support for orders
+      }
+    }
+  };
+
+  const handleStockVerifiedUpdate = useCallback((latest: Product[]) => {
+    setPublicProducts(latest.filter(p => p.isActive));
+    writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, latest.filter(p => p.isActive));
+  }, []);
+
+  const activePublicProducts = publicProducts;
 
   const catalogPriceBounds = useMemo(() => {
-    if (activePublicProducts.length === 0) {
-      return { min: 1000, max: 6000 };
-    }
+    if (activePublicProducts.length === 0) return { min: 0, max: 10000 };
     const prices = activePublicProducts.map((p) => p.price);
-    return {
-      min: Math.min(...prices),
-      max: Math.max(...prices),
-    };
+    return { min: Math.min(...prices), max: Math.max(...prices) };
   }, [activePublicProducts]);
 
   const effectiveMaxPrice = maxPriceLimit ?? catalogPriceBounds.max;
@@ -1495,23 +1505,17 @@ function SonuBhattiAppContent() {
           String(p.price).includes(q) ||
           p.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(q.replace(/[^a-z0-9]/g, ''));
 
-        const matchesPriceBucket =
-          priceFilter === 'ALL'
-            ? true
-            : priceFilter === 'UNDER_2500'
-            ? p.price < 2500
-            : priceFilter === '2500_TO_4000'
-            ? p.price >= 2500 && p.price <= 4000
-            : p.price > 4000;
-
         const matchesCeiling =
           maxPriceLimit === null || p.price <= maxPriceLimit;
+
+        const matchesFavourites =
+          !showFavouritesOnly || favourites.includes(p.id);
 
         return (
           matchesSize &&
           matchesSearch &&
-          matchesPriceBucket &&
-          matchesCeiling
+          matchesCeiling &&
+          matchesFavourites
         );
       })
       .sort((a, b) => {
@@ -1525,7 +1529,6 @@ function SonuBhattiAppContent() {
     activePublicProducts,
     debouncedSearchQuery,
     selectedSize,
-    priceFilter,
     maxPriceLimit,
     sortBy,
   ]);
@@ -1534,7 +1537,6 @@ function SonuBhattiAppContent() {
     searchQuery.trim() !== '' ||
     debouncedSearchQuery.trim() !== '' ||
     selectedSize !== 'ALL' ||
-    priceFilter !== 'ALL' ||
     maxPriceLimit !== null ||
     sortBy !== 'FEATURED';
 
@@ -1542,7 +1544,6 @@ function SonuBhattiAppContent() {
     setSearchQuery('');
     flushSearchNow('');
     setSelectedSize('ALL');
-    setPriceFilter('ALL');
     setMaxPriceLimit(null);
     setSortBy('FEATURED');
   }, [flushSearchNow]);
@@ -1569,228 +1570,32 @@ function SonuBhattiAppContent() {
         </div>
       )}
 
-      {/* =================================================================== */}
-      {/* STRICT 3-ZONE TOP BAR CONTRACT                                      */}
-      {/* =================================================================== */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-2 sm:gap-6 px-3 sm:px-8 py-2.5 sm:py-3.5 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xs border-b border-zinc-200 dark:border-zinc-800 no-print transition-colors">
-        {/* Zone 1: Single text element wordmark with phone text fitting */}
-        <a
-          href="#catalogue"
-          onClick={(e) => {
-            e.preventDefault();
-            handleNavigate('public');
+      {/* Floating Settings Button - Top Right */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => setIsSettingsOpen(true)}
+        className="fixed top-6 right-6 z-40 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+      >
+        <Settings className="w-6 h-6 text-zinc-900 dark:text-zinc-50" />
+      </motion.button>
+
+      {/* Auth/Welcome Viewports */}
+      {appState === 'welcome' && (
+        <WelcomePage
+          onComplete={() => {
+            localStorage.setItem('sdb_welcome_shown', 'true');
+            setAppState('auth');
           }}
-          className="text-xs xs:text-sm sm:text-base md:text-lg font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50 whitespace-nowrap shrink-0 font-display truncate max-w-[125px] xs:max-w-[175px] sm:max-w-none transition-colors"
-        >
-          {settings.businessName || t('brandName')}
-        </a>
+        />
+      )}
+      {appState === 'auth' && (
+        <AuthPage onAuthSuccess={() => setAppState('main')} />
+      )}
 
-        {/* Zone 2: 4 concise single-line text navigation links */}
-        <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-xs lg:text-sm font-medium text-zinc-600 dark:text-zinc-400">
-          <a
-            href="#catalogue"
-            onClick={(e) => {
-              e.preventDefault();
-              handleNavigate('public');
-              document
-                .getElementById('catalogue-grid')
-                ?.scrollIntoView({ behavior: 'smooth' });
-            }}
-            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-          >
-            {t('navCatalogue')}
-          </a>
-          <a
-            href="#receipt"
-            onClick={(e) => {
-              e.preventDefault();
-              setIsCartOpen(true);
-            }}
-            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-          >
-            {t('navReceiptMaker')}
-          </a>
-          <a
-            href="#admin"
-            onClick={(e) => {
-              e.preventDefault();
-              if (viewMode === 'public') {
-                handleNavigate(
-                  authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
-                );
-              } else {
-                handleNavigate('public');
-              }
-            }}
-            className="hover:text-zinc-900 dark:hover:text-zinc-50 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-          >
-            {viewMode === 'public' ? t('navAdminPortal') : t('navPublicStore')}
-          </a>
-        </nav>
-
-        {/* Zone 3: Sound Toggle, Notifications, Admin Portal & Shopping Cart */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-          {/* Mobile-only Back Button */}
-          <AnimatePresence>
-            {(viewHistory.length > 0 || viewMode !== 'public') && (
-              <motion.button
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                type="button"
-                onClick={handleGoBack}
-                className="flex md:hidden items-center gap-1 p-1.5 sm:px-2 sm:py-1.5 text-[10px] font-bold rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span>Back</span>
-              </motion.button>
-            )}
-          </AnimatePresence>
-          {/* Micro-Audio Action Feedback Toggle */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.92 }}
-            onClick={toggleSoundMute}
-            title={isSoundMuted ? 'Turn on Action Sound Effects' : 'Mute Action Sound Effects'}
-            aria-label={isSoundMuted ? 'Turn on Action Sound Effects' : 'Mute Action Sound Effects'}
-            className={`p-1.5 sm:px-2.5 sm:py-2 text-xs font-bold rounded-xl border transition-colors flex items-center gap-1 cursor-pointer shrink-0 ${
-              isSoundMuted
-                ? 'border-zinc-200 bg-zinc-100 text-zinc-400 hover:bg-zinc-200'
-                : 'border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50'
-            }`}
-          >
-            {isSoundMuted ? (
-              <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
-            ) : (
-              <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#00C1FD]" />
-            )}
-            <span className="hidden xl:inline text-[11px] text-zinc-700">
-              {isSoundMuted ? 'Muted' : 'Sound'}
-            </span>
-          </motion.button>
-
-          <LiveNotificationCenter
-            notifications={notifications}
-            unreadCount={notifications.filter((n) => !n.isRead).length}
-            onMarkRead={handleMarkNotificationRead}
-            onMarkAllRead={handleMarkAllNotificationsRead}
-            onDismiss={handleDismissNotification}
-            userRole={currentAdmin ? 'admin' : 'customer'}
-            onSelectOrder={() => {
-              setIsOrdersModalOpen(true);
-            }}
-          />
-
-          <AuthProfileHeader
-            admin={currentAdmin}
-            onOpenAdminLogin={() => handleNavigate('admin_login')}
-            onSignOut={handleSignOut}
-            isAdminPortalOpen={viewMode === 'admin_dashboard'}
-            onToggleAdminPortal={() => {
-              handleNavigate(viewMode === 'admin_dashboard' ? 'public' : 'admin_dashboard');
-            }}
-          />
-
-          {/* Theme Toggle Button */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.92 }}
-            onClick={toggleTheme}
-            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            aria-label={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            className="p-1.5 sm:px-2.5 sm:py-2 text-xs font-bold rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-          >
-            {theme === 'light' ? (
-              <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-600 dark:text-zinc-400" />
-            ) : (
-              <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-            )}
-            <span className="hidden xl:inline text-[11px] text-zinc-700 dark:text-zinc-300">
-              {theme === 'light' ? 'Dark' : 'Light'}
-            </span>
-          </motion.button>
-
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.93 }}
-            onClick={() => {
-              audioFeedback.play('click');
-              setIsCartOpen(true);
-            }}
-            className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 shadow-sm border border-emerald-700 active:scale-95"
-          >
-            <ShoppingBag className="w-3.5 h-3.5 text-white" />
-            <span className="hidden xs:inline">{t('cartButton')}</span>
-            <motion.span
-              key={totalCartItems}
-              initial={{ scale: 0.8 }}
-              animate={{ scale: [1, 1.3, 1] }}
-              transition={{ duration: 0.28, ease: 'easeOut' }}
-              className="font-mono tabular-nums px-1.5 py-0.2 rounded-full bg-emerald-800 text-white font-bold text-[10px] sm:text-[11px]"
-            >
-              {totalCartItems}
-            </motion.span>
-          </motion.button>
-        </div>
-      </header>
-
-      {/* =================================================================== */}
-      {/* UTILITY & MULTILINGUAL BAR (Below Header)                           */}
-      {/* =================================================================== */}
-      <div className="bg-stone-100 dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800 px-3 sm:px-8 py-2 no-print transition-colors">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-[11px] sm:text-xs text-zinc-600 dark:text-zinc-400 truncate min-w-0">
-            <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">{t('tagline')}</span>
-            <span aria-hidden="true">·</span>
-            <button
-              type="button"
-              onClick={() => {
-                if (viewMode === 'public') {
-                  handleNavigate(
-                    authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
-                  );
-                } else {
-                  handleNavigate('public');
-                }
-              }}
-              className="md:hidden font-bold text-[#00C1FD] hover:underline cursor-pointer whitespace-nowrap shrink-0"
-            >
-              {viewMode === 'public'
-                ? t('navAdminPortal')
-                : t('navPublicStore')}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            {/* Persistent Language Selector (English, Hindi, Punjabi) */}
-            <div className="inline-flex items-center gap-0.5 sm:gap-1 bg-white dark:bg-zinc-950 p-0.5 sm:p-1 rounded-lg border border-zinc-300 dark:border-zinc-700">
-              <Globe className="w-3 h-3 text-zinc-500 ml-1 mr-0.5" />
-              {(['en', 'hi', 'pa'] as LanguageCode[]).map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setLang(code)}
-                  className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
-                    lang === code
-                      ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  {LANGUAGE_META[code].nativeLabel}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =================================================================== */}
-      {/* MAIN VIEWPORT (pb-32 + bottom spacer guarantees zero nav overlap)   */}
-      {/* =================================================================== */}
-      <main className="flex-1 pb-32">
+      {/* Main Viewport */}
+      {appState === 'main' && (
+        <main className="flex-1 pb-32 pt-20">
         {viewMode === 'admin_login' && (
           <AdminLoginView
             onLoginSuccess={(token, adm) => {
@@ -1847,13 +1652,12 @@ function SonuBhattiAppContent() {
             {/* =============================================================== */}
             {/* HERO SECTION: OFFICIAL SONU DIESEL BHATTHI BANNER (BORDERLESS)  */}
             {/* =============================================================== */}
-            <section className="overflow-hidden rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors relative">
-              <div className="absolute inset-0 bg-linear-to-tr from-stone-50/50 to-transparent dark:from-zinc-950/20 pointer-events-none" />
-              <div className="w-full bg-white dark:bg-zinc-900 flex items-center justify-center px-4 py-6 sm:px-10 sm:py-10 transition-colors relative">
+            <section className="overflow-hidden transition-colors relative">
+              <div className="w-full flex items-center justify-center px-4 py-4 sm:px-10 sm:py-6 transition-colors relative">
                 <img
-                  src={HERO_WORKSHOP_IMAGE}
+                  src={theme === 'dark' ? HERO_DARK_IMAGE : HERO_WORKSHOP_IMAGE}
                   alt={settings.businessName || t('brandName')}
-                  className="w-full max-w-2xl max-h-52 sm:max-h-72 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal dark:opacity-90 drop-shadow-2xl"
+                  className="w-full max-w-2xl max-h-52 sm:max-h-72 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal"
                 />
               </div>
             </section>
@@ -1867,35 +1671,18 @@ function SonuBhattiAppContent() {
             >
               {/* Row 1: Search Input + Compact Sort + Icon Grid Toggle + Red Clear Action */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                {/* Search Input with Debounce Indicator */}
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <div className="relative flex-1 group">
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-zinc-900 dark:group-focus-within:text-zinc-100 transition-colors">
+                    <Search className="w-5 h-5" />
+                  </div>
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('searchPlaceholder')}
-                    className="w-full pl-9 pr-14 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-stone-50/70 dark:bg-zinc-950/70 focus:bg-white dark:focus:bg-zinc-950 text-xs sm:text-sm text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors"
+                    className="w-full pl-14 pr-40 py-4.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950 focus:bg-white dark:focus:bg-zinc-900 text-[16px] text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-4 focus:ring-zinc-900/5 dark:focus:ring-white/5 transition-all shadow-sm hover:shadow-md"
                   />
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={toggleVoiceSearch}
-                      title={isListening ? 'Stop Listening' : 'Voice Search'}
-                      className={`p-1.5 rounded-lg transition-all cursor-pointer shadow-xs active:scale-95 ${
-                        isListening 
-                          ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-500/20' 
-                          : 'bg-white dark:bg-zinc-900 text-zinc-400 dark:text-zinc-500 hover:text-[#00C1FD] hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800'
-                      }`}
-                    >
-                      {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                    </button>
-                    {isSearchDebouncing && (
-                      <RefreshCw
-                        className="w-3.5 h-3.5 text-[#00C1FD] animate-spin"
-                        aria-label="Updating search results"
-                      />
-                    )}
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
                     {searchQuery && (
                       <button
                         type="button"
@@ -1903,41 +1690,42 @@ function SonuBhattiAppContent() {
                           setSearchQuery('');
                           flushSearchNow('');
                         }}
-                        aria-label="Clear search query"
-                        className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded-md hover:bg-red-50"
+                        className="p-2.5 text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-5 h-5" />
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={toggleVoiceSearch}
+                      title={isListening ? 'Stop Listening' : 'Voice Search'}
+                      className={`h-11 px-6 rounded-full transition-all cursor-pointer font-bold text-xs flex items-center gap-2 shadow-sm active:scale-95 ${
+                        isListening 
+                          ? 'bg-red-500 text-white animate-pulse shadow-red-500/20' 
+                          : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200'
+                      }`}
+                    >
+                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      <span className="hidden xs:inline">{isListening ? 'Stop' : 'Voice'}</span>
+                    </button>
                   </div>
                 </div>
 
                 {/* Compact Sort + Icon Column Toggle + Red Clear All Button */}
                 <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
-                  {/* Small Compact Sort Dropdown */}
+                  {/* Simple Budget Input */}
                   <div className="relative inline-flex items-center">
-                    <ArrowUpDown className="w-3 h-3 text-zinc-500 absolute left-2.5 pointer-events-none" />
-                    <select
-                      aria-label={t('sortByLabel')}
-                      value={sortBy}
-                      onChange={(e) =>
-                        setSortBy(
-                          e.target.value as
-                            | 'FEATURED'
-                            | 'PRICE_ASC'
-                            | 'PRICE_DESC'
-                            | 'STOCK_DESC'
-                            | 'NAME_ASC'
-                        )
-                      }
-                      className="pl-7 pr-2.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-950 hover:bg-white dark:hover:bg-zinc-900 text-zinc-800 dark:text-zinc-200 text-[11px] font-bold focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 cursor-pointer transition-colors"
-                    >
-                      <option value="FEATURED">Sort: Default</option>
-                      <option value="PRICE_ASC">Price: Low → High</option>
-                      <option value="PRICE_DESC">Price: High → Low</option>
-                      <option value="STOCK_DESC">Stock: High → Low</option>
-                      <option value="NAME_ASC">Name: A → Z</option>
-                    </select>
+                    <Wallet className="w-3.5 h-3.5 text-zinc-500 absolute left-3 pointer-events-none" />
+                    <input
+                      type="number"
+                      placeholder="Budget"
+                      value={maxPriceLimit || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMaxPriceLimit(val === '' ? null : Number(val));
+                      }}
+                      className="pl-9 pr-4 py-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all w-32"
+                    />
                   </div>
 
                   {/* Icon-Only Column Switcher (Auto/2-Col vs 1-Col) */}
@@ -1951,10 +1739,10 @@ function SonuBhattiAppContent() {
                       onClick={() => setGridCols('auto')}
                       title="2-Column / Auto Grid"
                       aria-label="2-Column / Auto Grid"
-                      className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                        gridCols === 'auto' || gridCols === 2
-                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                      className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                        gridCols === 'auto'
+                          ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                          : 'text-zinc-400 hover:text-zinc-600'
                       }`}
                     >
                       <Grid2x2 className="w-3.5 h-3.5" />
@@ -1962,24 +1750,24 @@ function SonuBhattiAppContent() {
                     <button
                       type="button"
                       onClick={() => setGridCols(1)}
-                      title="Single Column List View"
-                      aria-label="Single Column List View"
-                      className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                      title="1-Column List"
+                      aria-label="1-Column List"
+                      className={`p-1.5 rounded-md transition-all cursor-pointer ${
                         gridCols === 1
-                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
-                          : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                          ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 shadow-xs'
+                          : 'text-zinc-400 hover:text-zinc-600'
                       }`}
                     >
-                      <Columns2 className="w-3.5 h-3.5 rotate-90" />
+                      <Columns2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
-                  {/* Red Reset / Clear All Filters Button */}
+                  {/* Red Clear Filters (Only visible if something active) */}
                   {hasActiveFilters && (
                     <button
                       type="button"
                       onClick={resetAllCatalogueFilters}
-                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap bg-red-600 hover:bg-red-700 text-white border border-red-700 shadow-2xs"
+                      className="inline-flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer"
                     >
                       <RotateCcw className="w-3 h-3" />
                       <span>{t('clearAllBtn')}</span>
@@ -1988,342 +1776,144 @@ function SonuBhattiAppContent() {
                 </div>
               </div>
 
-              {/* Row 2: Clean Dynamic Price Selection (Buttons + Custom Input) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mr-1">
-                    Price:
-                  </span>
-                  {[
-                    { id: 'ALL', label: 'Any', value: null },
-                    { id: '2500', label: '< 2.5k', value: 2500 },
-                    { id: '5000', label: '< 5k', value: 5000 },
-                    { id: '10000', label: '< 10k', value: 10000 },
-                  ].map((btn) => {
-                    const active = (btn.value === null && maxPriceLimit === null) || (btn.value !== null && maxPriceLimit === btn.value);
-                    return (
-                      <button
-                        key={btn.id}
-                        type="button"
-                        onClick={() => {
-                          setPriceFilter('ALL');
-                          setMaxPriceLimit(btn.value);
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all border cursor-pointer ${
-                          active
-                            ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100 shadow-2xs'
-                            : 'bg-white dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase">Max Budget:</span>
-                  <div className="relative">
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 font-bold text-[10px]">₹</span>
-                    <input
-                      type="number"
-                      placeholder="Custom"
-                      value={maxPriceLimit || ''}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? null : Number(e.target.value);
-                        setPriceFilter('ALL');
-                        setMaxPriceLimit(val);
-                      }}
-                      className="w-20 sm:w-24 pl-5 pr-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950 focus:bg-white dark:focus:bg-zinc-900 text-[11px] font-mono font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 transition-colors"
-                    />
-                    {maxPriceLimit && (
-                      <button 
-                        onClick={() => setMaxPriceLimit(null)}
-                        className="absolute -right-1 -top-1 w-3.5 h-3.5 bg-zinc-400 dark:bg-zinc-600 text-white rounded-full flex items-center justify-center hover:bg-zinc-600 dark:hover:bg-zinc-400 cursor-pointer"
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 3: Size Dropdown Selection + Result Summary */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-zinc-100 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                    Bhatti Size:
-                  </span>
-                  <div className="relative">
-                    <Maximize2 className="w-3 h-3 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <select
-                      value={selectedSize}
-                      onChange={(e) => setSelectedSize(e.target.value)}
-                      className="pl-8 pr-8 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-zinc-400 dark:hover:border-zinc-600 text-[11px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-all cursor-pointer appearance-none"
-                    >
-                      {[
-                        { value: 'ALL', label: t('filterAllSizes') },
-                        { value: 'Small', label: t('sizeSmall') },
-                        { value: 'Medium', label: t('sizeMedium') },
-                        { value: 'Large', label: t('sizeLarge') },
-                        { value: 'Extra Large', label: t('sizeExtraLarge') },
-                      ].map((sz) => (
-                        <option key={sz.value} value={sz.value}>
-                          {sz.label} ({getSizeCount(sz.value)})
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronRight className="w-3 h-3 text-zinc-400 absolute right-2 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
+              {/* Row 2 & 3: Compact Dropdown Filters */}
+              <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="relative flex-1 min-w-[140px]">
+                  <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none" />
+                  <select
+                    value={selectedSize}
+                    onChange={(e) => setSelectedSize(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all cursor-pointer appearance-none shadow-xs"
+                  >
+                    <option value="ALL">{t('filterAllSizes')} ({getSizeCount('ALL')})</option>
+                    {['Small', 'Medium', 'Large', 'Extra Large'].map((sz) => (
+                      <option key={sz} value={sz}>
+                        {translateSize(sz)} ({getSizeCount(sz)})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <ChevronRight className="w-4 h-4 text-zinc-400 rotate-90" />
                   </div>
                 </div>
 
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center justify-between sm:justify-end gap-2">
-                  <span>
-                    Showing{' '}
-                    <strong className="font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
-                      {filteredProducts.length}
-                    </strong>{' '}
-                    of {activePublicProducts.length} models
-                  </span>
                 </div>
-              </div>
             </section>
 
             {/* =============================================================== */}
-            {/* UNIFIED PRODUCT CATALOGUE GRID                                  */}
+            {/* DYNAMIC PRODUCT GRID / LIST DISPLAY                             */}
             {/* =============================================================== */}
-            <section id="catalogue-grid" className="scroll-mt-24 space-y-6">
+            <section id="catalogue-grid" className="scroll-mt-32 min-h-[400px]">
               {filteredProducts.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.18 }}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-10 text-center space-y-3 transition-colors"
-                >
-                  <p className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-                    {t('noProductsFound')}
-                  </p>
+                <div className="flex flex-col items-center justify-center py-20 text-center space-y-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
+                    <Search className="w-8 h-8 text-zinc-300" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
+                      {t('noProductsFound')}
+                    </h3>
+                    <p className="text-xs text-zinc-500">
+                      Try adjusting your filters or search terms.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={resetAllCatalogueFilters}
-                    className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-700 cursor-pointer inline-flex items-center gap-1.5 shadow-xs transition-colors"
+                    className="px-5 py-2 rounded-xl bg-zinc-900 text-white text-xs font-bold transition-all hover:bg-zinc-800 active:scale-95 cursor-pointer"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{t('clearAllBtn')}</span>
+                    {t('resetFilters')}
                   </button>
-                </motion.div>
+                </div>
               ) : (
                 <div
-                  className={`grid ${
-                    gridCols === 1
-                      ? 'grid-cols-1 gap-4 max-w-xl mx-auto w-full'
-                      : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5'
+                  className={`grid gap-4 sm:gap-6 ${
+                    gridCols === 'auto'
+                      ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                      : 'grid-cols-1 max-w-2xl mx-auto'
                   }`}
                 >
-                  <AnimatePresence mode="popLayout">
-                    {filteredProducts.map((product) => {
+
+                  {filteredProducts.map((product) => {
                       const cartEntry = cart.find(
                         (c) => c.product.id === product.id
                       );
                       const outOfStock = product.stockQuantity <= 0;
-                      const isLowStock =
-                        !outOfStock &&
-                        product.stockQuantity <=
-                          (settings.lowStockThreshold || 10);
 
                       return (
                         <motion.article
-                          layout
                           key={product.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.98 }}
+                          transition={{ duration: 0.2 }}
+                          whileHover={{ scale: 1.02 }}
                           onClick={() => setInspectedProduct(product)}
-                          initial={{ opacity: 0, y: 6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 4 }}
-                          whileHover={{ 
-                            scale: 1.015,
-                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)"
-                          }}
-                          transition={{
-                            duration: 0.15,
-                            ease: 'easeOut',
-                          }}
-                          className="group bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 shadow-sm cursor-pointer"
+                          className="group bg-zinc-900 rounded-3xl p-3 border border-zinc-800 flex flex-col shadow-xl cursor-pointer"
                         >
-                          <div>
-                            {/* Product Image Inset Frame (4:3) */}
-                            <div className="relative aspect-[4/3] bg-stone-100 dark:bg-zinc-950 overflow-hidden border-b border-zinc-200 dark:border-zinc-800 transition-colors">
-                              <ProductImage
-                                src={product.imageUrl}
-                                alt={product.name}
-                                sizeLabel={product.size}
-                                className="w-full h-full object-contain"
-                                enableHoverEffect={true}
-                              />
-
-                              {/* Interactive Zoom / Inspect Trigger */}
+                          {/* Image Container */}
+                          <div className="relative aspect-square bg-zinc-800 rounded-2xl overflow-hidden mb-3">
+                            <ProductImage
+                              src={product.imageUrl}
+                              alt={product.name}
+                              sizeLabel={product.size}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
+                            
+                            {/* Favourite Button (Heart) */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFavourites((prev) =>
+                                  prev.includes(product.id)
+                                    ? prev.filter((id) => id !== product.id)
+                                    : [...prev, product.id]
+                                );
+                              }}
+                              className="absolute top-3 right-3 p-2 bg-zinc-900/50 backdrop-blur-sm rounded-full text-white hover:text-red-500 transition-colors"
+                            >
+                              <Heart className={`w-5 h-5 ${favourites.includes(product.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                            </button>
+                          </div>
+                            
+                          {/* Content Area */}
+                          <div className="flex flex-col flex-1 px-1">
+                            <h3 className="text-sm font-bold text-white line-clamp-1">
+                              {product.name}
+                            </h3>
+                            <p className="text-xs text-zinc-400 mb-4">{product.size}</p>
+                            
+                            {/* Price and Cart Button */}
+                            <div className="mt-auto flex items-center justify-between">
+                              <span className="text-xl font-black text-white">
+                                {product.price}$
+                              </span>
                               <button
-                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setInspectedProduct(product);
+                                  addToCart(product);
                                 }}
-                                className="hidden sm:flex absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-xs text-white text-[10px] font-semibold items-center gap-1 opacity-90 group-hover:opacity-100 transition-all duration-150 cursor-pointer shadow-xs border border-zinc-700"
+                                disabled={outOfStock}
+                                className={`p-3 rounded-2xl ${outOfStock ? 'bg-zinc-800 text-zinc-500' : 'bg-white text-zinc-900'} transition-colors`}
                               >
-                                <Maximize2 className="w-3 h-3 text-white" />
-                                <span>{t('zoomPhotoBtn')}</span>
+                                <ShoppingBag className="w-5 h-5" />
                               </button>
                             </div>
-
-                            {/* Card Body: Bigger Product Name & Green/Red Stock Display */}
-                            <div className="p-3 sm:p-4 space-y-2">
-                              {/* Metadata: Size & Green/Red Stock Status */}
-                              <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
-                                <span className="font-bold text-zinc-700 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded-md text-[11px]">
-                                  {translateSize(product.size)}
-                                </span>
-                                <span
-                                  className={`font-mono tabular-nums font-extrabold text-[11px] sm:text-xs px-2 py-0.5 rounded-md border ${
-                                    outOfStock
-                                      ? 'bg-red-50 border-red-200 text-red-600'
-                                      : isLowStock
-                                      ? 'bg-amber-50 border-amber-200 text-amber-800'
-                                      : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                                  }`}
-                                >
-                                  {outOfStock
-                                    ? t('outOfStock')
-                                    : `${product.stockQuantity} in stock`}
-                                </span>
-                              </div>
-
-                              {/* Bigger Product Name */}
-                              <h2 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-zinc-100 leading-snug line-clamp-2">
-                                {product.name}
-                              </h2>
-
-                              {/* Dynamic Price Badge */}
-                              <div className="pt-1.5 flex items-baseline justify-between border-t border-stone-100 dark:border-zinc-800 transition-colors">
-                                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
-                                  {t('priceLabel')}
-                                </span>
-                                <span className="text-base sm:text-lg font-extrabold font-mono tabular-nums text-zinc-900 dark:text-zinc-50 transition-colors">
-                                  ₹{product.price.toLocaleString('en-IN')}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Add to Cart (Green) / Quantity Stepper (Red Minus, Green Plus) */}
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1"
-                          >
-                            {cartEntry ? (
-                              <div className="flex items-center gap-1.5">
-                                <div className="flex-1 flex items-center justify-between gap-1.5 p-1 rounded-xl bg-stone-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 transition-colors">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateCartQty(
-                                        product.id,
-                                        cartEntry.quantity - 1
-                                      )
-                                    }
-                                    aria-label="Decrease quantity"
-                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-red-600 hover:bg-red-700 text-white flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
-                                  >
-                                    <Minus className="w-3.5 h-3.5" />
-                                  </button>
-                                  <div className="text-xs sm:text-sm font-extrabold font-mono tabular-nums text-zinc-900 dark:text-zinc-50 truncate px-1 transition-colors">
-                                    {cartEntry.quantity}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateCartQty(
-                                        product.id,
-                                        cartEntry.quantity + 1
-                                      )
-                                    }
-                                    disabled={
-                                      cartEntry.quantity >= product.stockQuantity
-                                    }
-                                    aria-label="Increase quantity"
-                                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors font-bold shadow-2xs"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const now = new Date();
-                                    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-                                    const date = now.toLocaleDateString('en-IN');
-                                    const customerName = currentUser?.name || 'Customer';
-                                    const stockMsg = product.stockQuantity <= 0 ? 'Please request an order (Out of Stock)' : 'Do you have this in stock?';
-                                    const text = `Product: ${product.name}\nCustomer: ${customerName}\nQty: ${cartEntry.quantity}\nTime: ${time}\nDate: ${date}\n\n${stockMsg}`;
-                                    window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                                  }}
-                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:border-emerald-500 text-emerald-600 dark:text-emerald-400 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                                  title="Inquire on WhatsApp"
-                                >
-                                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  disabled={outOfStock}
-                                  onClick={() => addToCart(product)}
-                                  className={`flex-1 py-2 sm:py-2.5 px-3 rounded-xl text-xs font-bold transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-xs ${
-                                    outOfStock
-                                      ? 'bg-red-50 text-red-600 border border-red-200 cursor-not-allowed'
-                                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white'
-                                  }`}
-                                >
-                                  <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
-                                  <span className="truncate">
-                                    {outOfStock
-                                      ? t('outOfStock')
-                                      : t('addToCart')}
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const now = new Date();
-                                    const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-                                    const date = now.toLocaleDateString('en-IN');
-                                    const customerName = currentUser?.name || 'Customer';
-                                    const stockMsg = product.stockQuantity <= 0 ? 'Please request an order (Out of Stock)' : 'Do you have this in stock?';
-                                    const text = `Product: ${product.name}\nCustomer: ${customerName}\nQty: 1\nTime: ${time}\nDate: ${date}\n\n${stockMsg}`;
-                                    window.open(`https://wa.me/${(settings.whatsappNumber || '918708381844').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                                  }}
-                                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-zinc-200 hover:bg-emerald-50 hover:border-emerald-500 text-emerald-600 flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                                  title="Inquire on WhatsApp"
-                                >
-                                  <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </motion.article>
-                      );
                     })}
-                  </AnimatePresence>
+                  </div>
                 </div>
-              )}
-            </section>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Dedicated bottom scroll clearance spacer so no card is ever hidden behind the fixed bottom bar */}
         <div className="h-24 w-full shrink-0 no-print" aria-hidden="true" />
       </main>
+    )}
 
       {/* =================================================================== */}
       {/* DETAILED PRODUCT SPECIFICATION SHEET MODAL (MATCHING ATTACHED UI)   */}
@@ -2354,25 +1944,31 @@ function SonuBhattiAppContent() {
         settings={settings}
         isOnline={isOnline}
         currentUser={currentUser}
-        onStockVerifiedUpdate={(latest) => {
-          setPublicProducts(latest);
-          writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, latest);
-        }}
+        onStockVerifiedUpdate={handleStockVerifiedUpdate}
       />
 
-      {/* Customer Orders & Real-time Fabrication Tracker Modal */}
-      <CustomerOrdersModal
-        isOpen={isOrdersModalOpen}
-        onClose={() => setIsOrdersModalOpen(false)}
-        orders={userOrders}
-        whatsappNumber={settings.whatsappNumber}
+      <SettingsPopup
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        isSoundMuted={isSoundMuted}
+        onToggleSound={toggleSoundMute}
+        currentLang={lang}
+        onChangeLang={setLang}
+        isLoggedIn={!!authToken}
+        onLogout={handleSignOut}
       />
 
-      {/* Interactive Micro-Action Notification Toast with Spring Animation */}
-      <ActionFeedbackToast
-        toast={actionToast}
-        onDismiss={() => setActionToast(null)}
-      />
+      <AnimatePresence>
+        {actionToast && (
+          <ActionFeedbackToast
+            key={actionToast.id}
+            toast={actionToast}
+            onDismiss={() => setActionToast(null)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Live Push Notification Floating Banner */}
       <AnimatePresence>
@@ -2382,25 +1978,39 @@ function SonuBhattiAppContent() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -15, scale: 0.95 }}
             onClick={() => setLiveToast(null)}
-            className="fixed top-20 right-4 z-50 max-w-sm p-4 rounded-2xl bg-[#1c1c1e] text-white border border-zinc-700 shadow-2xl flex items-start gap-3 cursor-pointer ring-1 ring-white/10"
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 min-w-[280px] max-w-sm p-4 rounded-[2rem] bg-indigo-50 text-indigo-900 border-2 border-indigo-100 shadow-2xl flex items-center gap-4 cursor-pointer ring-1 ring-white/20 transition-all"
           >
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
-              <Sparkles className="w-4 h-4 text-[#00C1FD]" />
+            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
+               <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-4 h-4">
+                  <div className="bg-white col-start-1 row-start-1" />
+                  <div className="bg-white col-start-3 row-start-1" />
+                  <div className="bg-white col-start-1 row-start-2" />
+                  <div className="bg-white col-start-2 row-start-2" />
+                  <div className="bg-white col-start-3 row-start-2" />
+               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <h5 className="text-xs font-bold text-white leading-tight">
+              <h5 className="text-base font-black text-indigo-950 leading-tight">
                 {liveToast.title}
               </h5>
-              <p className="text-[11px] text-zinc-300 mt-0.5 leading-snug">
-                {liveToast.message}
-              </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 flex items-center justify-center">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full shadow-inner" />
+                </div>
+                <p className="text-[13px] font-bold text-indigo-700 truncate leading-snug">
+                  {liveToast.message}
+                </p>
+              </div>
             </div>
             <button
               type="button"
-              onClick={() => setLiveToast(null)}
-              className="text-zinc-500 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLiveToast(null);
+              }}
+              className="text-indigo-400 hover:text-indigo-950 p-1 transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </motion.div>
         )}
@@ -2427,64 +2037,33 @@ function SonuBhattiAppContent() {
         </div>
       )}
 
-      {/* =================================================================== */}
-      {/* FULLY ATTACHED BOTTOM APP NAVIGATION BAR                            */}
-      {/* =================================================================== */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_-6px_24px_rgba(0,0,0,0.3)] px-3 py-2 no-print transition-colors">
-        <div className="max-w-md mx-auto bg-stone-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full py-1 px-3 flex items-center justify-around text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition-colors">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] px-3 py-2 no-print transition-colors">
+        <div className="max-w-md mx-auto bg-stone-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full py-1 px-3 flex items-center justify-around text-[10px] font-bold text-zinc-600 dark:text-zinc-400 transition-colors">
           <button
             type="button"
-            onClick={() => {
-              handleNavigate('public');
-            }}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
-              viewMode === 'public'
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
+            onClick={() => handleNavigate('public')}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-colors ${viewMode === 'public' ? 'text-zinc-950 dark:text-zinc-50' : ''}`}
           >
-            <LayoutGrid className="w-4 h-4" />
-            <span className="text-[10px]">Catalogue</span>
+            <LayoutGrid className="w-5 h-5" />
+            <span>Home</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
-            className="relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer transition-colors"
+            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-zinc-600 dark:text-zinc-400"
           >
-            <ShoppingBag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            <span className="text-[10px] font-bold">Cart</span>
-            {totalCartItems > 0 && (
-              <span className="absolute -top-0.5 right-0.5 px-1.5 py-0.2 rounded-full bg-emerald-600 text-white font-mono text-[9px] font-bold shadow-2xs ring-2 ring-white dark:ring-zinc-900">
-                {totalCartItems}
-              </span>
-            )}
+            <ShoppingBag className="w-5 h-5" />
+            <span>Cart</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setIsOrdersModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 cursor-pointer transition-colors"
+            onClick={() => handleNavigate(currentAdmin ? 'admin_dashboard' : 'admin_login')}
+            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-zinc-600 dark:text-zinc-400"
           >
-            <Send className="w-4 h-4 text-[#00C1FD]" />
-            <span className="text-[10px]">Orders</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              handleNavigate(
-                authToken && currentAdmin ? 'admin_dashboard' : 'admin_login'
-              );
-            }}
-            className={`flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-full transition-colors cursor-pointer ${
-              viewMode === 'admin_login' || viewMode === 'admin_dashboard'
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-bold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Lock className="w-4 h-4 text-amber-500" />
-            <span className="text-[10px]">Admin</span>
+            <Lock className="w-5 h-5" />
+            <span>Admin</span>
           </button>
         </div>
       </nav>

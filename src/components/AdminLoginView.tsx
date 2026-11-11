@@ -85,14 +85,14 @@ export const AdminLoginView: React.FC<AdminLoginViewProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••"
-              className="w-full px-3 py-2.5 text-sm font-mono tracking-wider rounded-md bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-colors"
+              className="w-full px-4 py-3 text-sm font-mono tracking-wider rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:border-zinc-950 dark:focus:border-zinc-100 transition-all"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 rounded-md bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+            className="w-full py-3 px-4 rounded-2xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 text-sm font-bold shadow-md hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'Continue'}
           </button>

@@ -957,14 +957,14 @@ export const AdminSmartEntry: React.FC<AdminSmartEntryProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsEditingVoicePreview(!isEditingVoicePreview)}
-                  className="px-5 py-3.5 rounded-xl border border-zinc-200 bg-white text-zinc-600 font-bold text-xs hover:bg-stone-50 cursor-pointer transition-all"
+                  className="px-5 py-3.5 rounded-xl border border-zinc-300 bg-zinc-100 text-zinc-900 font-black uppercase tracking-tighter text-xs hover:bg-zinc-200 cursor-pointer transition-all shadow-sm"
                 >
                   Edit Details
                 </button>
                 <button
                   type="button"
                   onClick={() => setVoiceStep('image')}
-                  className="px-5 py-3.5 rounded-xl border border-zinc-200 bg-white text-zinc-600 font-bold text-xs hover:bg-stone-50 cursor-pointer transition-all"
+                  className="px-5 py-3.5 rounded-xl border border-zinc-300 bg-zinc-100 text-zinc-900 font-black uppercase tracking-tighter text-xs hover:bg-zinc-200 cursor-pointer transition-all shadow-sm"
                 >
                   Change Photo
                 </button>

@@ -5,6 +5,9 @@ export interface Product {
   imageUrl: string;
   price: number;
   stockQuantity: number;
+  burnerType?: string;
+  material?: string;
+  fuelType?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -49,7 +52,7 @@ export interface CartItem {
 
 export interface OfflineAction {
   id: string;
-  type: 'CREATE_PRODUCT' | 'UPDATE_PRODUCT' | 'ADJUST_STOCK' | 'UPDATE_SETTINGS';
+  type: 'CREATE_PRODUCT' | 'UPDATE_PRODUCT' | 'ADJUST_STOCK' | 'DELETE_PRODUCT' | 'UPDATE_SETTINGS';
   payload: any;
   description: string;
   createdAt: string;
