@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { Mic, Plus, Check, Save, Package, ShoppingCart, History, Settings as SettingsIcon, Sparkles, Search } from 'lucide-react';
+import { Mic, Plus, Check, Save, Package, ShoppingCart, History, Settings as SettingsIcon, Sparkles, Search, Phone, MessageCircle, Clock, CheckCircle2, Truck, XCircle, AlertCircle, PhoneCall } from 'lucide-react';
 import {
   AdminProfile,
   BusinessSettings,
@@ -91,6 +91,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'confirmed' | 'completed'>('all');
 
   // Stock Adjust Modal State
   const [stockModalProduct, setStockModalProduct] = useState<Product | null>(null);
@@ -868,84 +869,275 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       )}
 
       {activeTab === 'orders' && (
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md overflow-hidden transition-colors">
+        <div className="space-y-6">
+          {/* Header & Simple Status Filter Buttons (Large Text & Easy to Tap) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 sm:p-5 rounded-2xl">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-zinc-950 dark:text-zinc-50 tracking-tight">
+                Customer Orders ({orders.length})
+              </h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Simple one-tap order management for shop owners
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'all', label: 'All Orders', count: orders.length },
+                {
+                  key: 'pending',
+                  label: 'Pending',
+                  count: orders.filter((o) => o.status === 'pending').length,
+                },
+                {
+                  key: 'confirmed',
+                  label: 'Confirmed',
+                  count: orders.filter((o) => o.status === 'confirmed').length,
+                },
+                {
+                  key: 'completed',
+                  label: 'Completed',
+                  count: orders.filter((o) => o.status === 'completed').length,
+                },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setOrderFilter(tab.key as any)}
+                  className={`h-11 px-4 rounded-xl font-bold text-sm transition-all cursor-pointer flex items-center gap-2 border ${
+                    orderFilter === tab.key
+                      ? 'bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 border-zinc-950 dark:border-zinc-50 shadow-md'
+                      : 'bg-stone-50 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-stone-100'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className="px-1.5 py-0.5 rounded-full text-xs bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono">
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Orders List */}
           {orders.length === 0 ? (
-            <div className="p-12 text-center text-xs font-mono text-zinc-500 dark:text-zinc-400">
-              No customer orders received yet.
+            <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center space-y-3">
+              <ShoppingCart className="w-12 h-12 text-zinc-300 mx-auto" />
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                No orders received yet
+              </h3>
+              <p className="text-sm text-zinc-500">
+                When customers place an order through WhatsApp or website, they will show here.
+              </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-200 dark:border-zinc-800 text-[11px] font-mono uppercase text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-950/50">
-                    <th className="py-3 px-4">Order Info</th>
-                    <th className="py-3 px-4">Customer</th>
-                    <th className="py-3 px-4">Total</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-xs">
-                  {orders.map((o) => {
-                    const statusColors: Record<string, string> = {
-                      pending: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800',
-                      confirmed: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800',
-                      processing: 'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800',
-                      dispatched: 'bg-purple-100 text-indigo-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800',
-                      completed: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800',
-                      cancelled: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800',
-                    };
-                    const currentStatusColor = statusColors[o.status] || 'bg-zinc-100 text-zinc-700 border-zinc-200';
+            <div className="space-y-4 sm:space-y-6">
+              {orders
+                .filter((o) => {
+                  if (orderFilter === 'all') return true;
+                  return o.status === orderFilter;
+                })
+                .map((o) => {
+                  let items: any[] = [];
+                  try {
+                    items = JSON.parse(o.itemsJson || '[]');
+                  } catch {
+                    items = [];
+                  }
 
-                    return (
-                      <tr key={o.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-zinc-950 dark:text-zinc-50">#{o.orderNumber}</div>
-                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
-                            {new Date(o.createdAt).toLocaleString()}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-zinc-950 dark:text-zinc-50">{o.customerName}</div>
-                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">{o.customerPhone}</div>
-                        </td>
-                        <td className="py-3 px-4 font-bold text-zinc-950 dark:text-zinc-50">
-                          ₹{o.totalAmount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex flex-col gap-1.5">
-                            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold border w-fit uppercase ${currentStatusColor}`}>
-                              {o.status}
+                  const statusConfig: Record<
+                    string,
+                    { label: string; badge: string; border: string }
+                  > = {
+                    pending: {
+                      label: '🟡 Pending',
+                      badge: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300',
+                      border: 'border-amber-200 dark:border-amber-900/40',
+                    },
+                    confirmed: {
+                      label: '🔵 Confirmed',
+                      badge: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300',
+                      border: 'border-blue-200 dark:border-blue-900/40',
+                    },
+                    processing: {
+                      label: '⚙️ In Progress',
+                      badge: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950/60 dark:text-indigo-300',
+                      border: 'border-indigo-200 dark:border-indigo-900/40',
+                    },
+                    dispatched: {
+                      label: '🚚 Dispatched',
+                      badge: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950/60 dark:text-purple-300',
+                      border: 'border-purple-200 dark:border-purple-900/40',
+                    },
+                    completed: {
+                      label: '🟢 Completed',
+                      badge: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300',
+                      border: 'border-emerald-200 dark:border-emerald-900/40',
+                    },
+                    cancelled: {
+                      label: '🔴 Cancelled',
+                      badge: 'bg-red-100 text-red-900 border-red-300 dark:bg-red-950/60 dark:text-red-300',
+                      border: 'border-red-200 dark:border-red-900/40',
+                    },
+                  };
+
+                  const currentConf = statusConfig[o.status] || {
+                    label: o.status.toUpperCase(),
+                    badge: 'bg-zinc-100 text-zinc-900 border-zinc-300',
+                    border: 'border-zinc-200 dark:border-zinc-800',
+                  };
+
+                  const cleanPhone = o.customerPhone.replace(/[^0-9]/g, '');
+
+                  return (
+                    <div
+                      key={o.id}
+                      className={`bg-white dark:bg-zinc-900 border-2 ${currentConf.border} rounded-3xl p-5 sm:p-7 shadow-sm transition-all space-y-5`}
+                    >
+                      {/* Top Header: Big Order Title + Status */}
+                      <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl sm:text-3xl font-black text-zinc-950 dark:text-zinc-50 tracking-tight">
+                              Order #{o.orderNumber}
                             </span>
-                            <select
-                              value={o.status}
-                              onChange={(e) => onUpdateOrderStatus(o.id, e.target.value)}
-                              className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 rounded px-1.5 py-0.5 text-[10px] text-zinc-950 dark:text-zinc-50 focus:outline-none transition-colors cursor-pointer w-fit"
+                            <span
+                              className={`text-sm sm:text-base font-bold px-3.5 py-1 rounded-full border ${currentConf.badge}`}
                             >
-                              <option value="pending">PENDING</option>
-                              <option value="confirmed">CONFIRMED</option>
-                              <option value="processing">PROCESSING</option>
-                              <option value="dispatched">DISPATCHED</option>
-                              <option value="completed">COMPLETED</option>
-                              <option value="cancelled">CANCELLED</option>
-                            </select>
+                              {currentConf.label}
+                            </span>
                           </div>
-                        </td>
-                        <td className="py-3 px-4 text-right">
+                          <div className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mt-1 flex items-center gap-1.5">
+                            <Clock className="w-4 h-4 text-zinc-400" />
+                            <span>
+                              {new Date(o.createdAt).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Total Amount in Huge Font */}
+                        <div className="text-right">
+                          <span className="text-xs uppercase font-bold text-zinc-400 tracking-wider block">
+                            Total Bill
+                          </span>
+                          <span className="text-2xl sm:text-3xl font-black text-zinc-950 dark:text-zinc-50">
+                            ₹{o.totalAmount.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Customer Details Box & Big Contact Buttons */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-stone-50 dark:bg-zinc-950 p-4 sm:p-5 rounded-2xl border border-zinc-200/70 dark:border-zinc-800">
+                        <div className="md:col-span-6 space-y-1">
+                          <span className="text-xs uppercase font-bold text-zinc-400 tracking-wider block">
+                            Customer Details
+                          </span>
+                          <h4 className="text-xl sm:text-2xl font-bold text-zinc-950 dark:text-zinc-50">
+                            {o.customerName}
+                          </h4>
+                          <p className="text-base sm:text-lg font-mono font-bold text-zinc-600 dark:text-zinc-300">
+                            📞 {o.customerPhone}
+                          </p>
+                          {o.shippingAddress && (
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                              📍 {o.shippingAddress}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="md:col-span-6 flex flex-wrap gap-2.5 sm:justify-end">
                           <a
-                            href={`https://wa.me/${o.customerPhone}?text=${encodeURIComponent(`Hello ${o.customerName}, about your order #${o.orderNumber}...`)}`}
+                            href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                              `Hello ${o.customerName}, regarding your Sonu Diesel Bhatti order #${o.orderNumber}...`
+                            )}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold transition-colors inline-block"
+                            className="flex-1 sm:flex-initial h-13 px-5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
                           >
-                            WhatsApp
+                            <MessageCircle className="w-5 h-5" />
+                            <span>WhatsApp</span>
                           </a>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+                          <a
+                            href={`tel:${cleanPhone}`}
+                            className="flex-1 sm:flex-initial h-13 px-5 rounded-2xl bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95 text-white dark:text-zinc-900 font-bold text-base flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                          >
+                            <Phone className="w-5 h-5" />
+                            <span>Call</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Items Ordered List */}
+                      {items.length > 0 && (
+                        <div className="space-y-2">
+                          <span className="text-xs uppercase font-bold text-zinc-400 tracking-wider block">
+                            Ordered Items ({items.length})
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {items.map((item, idx) => (
+                              <div
+                                key={idx}
+                                className="p-3 rounded-xl bg-stone-100/70 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 flex items-center justify-between"
+                              >
+                                <div>
+                                  <p className="text-sm sm:text-base font-bold text-zinc-950 dark:text-zinc-50">
+                                    {item.name}
+                                  </p>
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    Size: {item.size} • Qty: {item.quantity}
+                                  </p>
+                                </div>
+                                <span className="text-base font-bold text-zinc-950 dark:text-zinc-100">
+                                  ₹{((item.price || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Large One-Tap Status Assignment Buttons for Parents / 80s Generation */}
+                      <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-2">
+                        <span className="text-xs uppercase font-bold text-zinc-400 tracking-wider block">
+                          Tap to Change Status:
+                        </span>
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                          {[
+                            { key: 'pending', label: '🟡 Pending', bg: 'hover:bg-amber-50 active:bg-amber-100' },
+                            { key: 'confirmed', label: '🔵 Confirm', bg: 'hover:bg-blue-50 active:bg-blue-100' },
+                            { key: 'dispatched', label: '🚚 Dispatched', bg: 'hover:bg-purple-50 active:bg-purple-100' },
+                            { key: 'completed', label: '🟢 Completed', bg: 'hover:bg-emerald-50 active:bg-emerald-100' },
+                            { key: 'cancelled', label: '🔴 Cancel', bg: 'hover:bg-red-50 active:bg-red-100' },
+                          ].map((st) => {
+                            const isCurrent = o.status === st.key;
+                            return (
+                              <button
+                                key={st.key}
+                                type="button"
+                                onClick={() => onUpdateOrderStatus(o.id, st.key)}
+                                className={`h-12 px-3 rounded-xl font-bold text-sm sm:text-base transition-all cursor-pointer flex items-center justify-center gap-1.5 border-2 ${
+                                  isCurrent
+                                    ? 'bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 border-zinc-950 dark:border-zinc-50 shadow-md scale-102 ring-2 ring-zinc-400'
+                                    : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400'
+                                }`}
+                              >
+                                <span>{st.label}</span>
+                                {isCurrent && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>

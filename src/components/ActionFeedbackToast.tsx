@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
+import { ShoppingBag, Heart, Trash2, CheckCircle2 } from 'lucide-react';
 
 export interface ActionToastData {
   id: string;
@@ -30,109 +31,54 @@ export const ActionFeedbackToast: React.FC<ActionFeedbackToastProps> = ({
     if (!toast) return;
     const timer = setTimeout(() => {
       onDismiss();
-    }, 3200);
+    }, 2200);
     return () => clearTimeout(timer);
   }, [toast, onDismiss]);
 
-  const getStyle = () => {
-    switch (toast?.type) {
+  if (!toast) return null;
+
+  const renderIcon = () => {
+    switch (toast.type) {
       case 'cart_add':
-      case 'order_placed':
-        return {
-          bg: 'bg-green-50',
-          border: 'border-green-100',
-          title: 'Doing Great!',
-          iconBg: 'bg-green-500',
-          iconColor: 'text-green-500',
-          msgColor: 'text-green-700',
-          accent: 'text-green-600',
-          Icon: () => (
-            <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center shrink-0">
-               <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-4 h-4">
-                  <div className="bg-black col-start-1 row-start-1" />
-                  <div className="bg-black col-start-3 row-start-1" />
-                  <div className="bg-black col-start-1 row-start-3" />
-                  <div className="bg-black col-start-2 row-start-3" />
-                  <div className="bg-black col-start-3 row-start-3" />
-               </div>
-            </div>
-          )
-        };
+      case 'cart_update':
+        return <ShoppingBag className="w-4 h-4 text-white dark:text-zinc-950 shrink-0" />;
+      case 'favorite_add':
+        return <Heart className="w-4 h-4 fill-white text-white dark:fill-zinc-950 dark:text-zinc-950 shrink-0" />;
+      case 'cart_remove':
       case 'product_delete':
       case 'favorite_remove':
-        return {
-          bg: 'bg-red-50',
-          border: 'border-red-100',
-          title: 'Pay Attention!',
-          iconBg: 'bg-red-500',
-          iconColor: 'text-red-500',
-          msgColor: 'text-red-700',
-          accent: 'text-red-600',
-          Icon: () => (
-            <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center shrink-0">
-               <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-4 h-4">
-                  <div className="bg-black col-start-1 row-start-1" />
-                  <div className="bg-black col-start-3 row-start-1" />
-                  <div className="bg-black col-start-1 row-start-2" />
-                  <div className="bg-black col-start-2 row-start-2" />
-                  <div className="bg-black col-start-3 row-start-2" />
-               </div>
-            </div>
-          )
-        };
+        return <Trash2 className="w-4 h-4 text-zinc-400 shrink-0" />;
+      case 'order_placed':
       default:
-        return {
-          bg: 'bg-blue-50',
-          border: 'border-blue-100',
-          title: 'Doing OK',
-          iconBg: 'bg-blue-500',
-          iconColor: 'text-blue-500',
-          msgColor: 'text-blue-700',
-          accent: 'text-blue-600',
-          Icon: () => (
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
-               <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-4 h-4">
-                  <div className="bg-black col-start-1 row-start-1" />
-                  <div className="bg-black col-start-3 row-start-1" />
-                  <div className="bg-black col-start-1 row-start-2" />
-                  <div className="bg-black col-start-2 row-start-2" />
-                  <div className="bg-black col-start-3 row-start-2" />
-               </div>
-            </div>
-          )
-        };
+        return <CheckCircle2 className="w-4 h-4 text-white dark:text-zinc-950 shrink-0" />;
     }
   };
 
-  const style = getStyle();
-
   return (
-    <div className="fixed bottom-6 right-6 z-[100] pointer-events-none flex flex-col items-end no-print">
-      <AnimatePresence mode="wait">
-        {toast && (
-          <motion.div
-            key={toast.id}
-            initial={{ opacity: 0, x: 20, scale: 0.9 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
-            onClick={onDismiss}
-            className={`pointer-events-auto cursor-pointer flex items-center gap-4 px-5 py-4 rounded-[2rem] ${style.bg} border-2 ${style.border} shadow-xl min-w-[280px] max-w-sm transition-colors`}
-          >
-            <style.Icon />
-            <div className="min-w-0 flex-1">
-              <p className="text-base font-black text-zinc-900 leading-tight">{style.title}</p>
-              {toast.message && (
-                <div className="flex items-center gap-1.5 mt-0.5">
-                   <div className={`w-3.5 h-3.5 rounded-full ${style.iconBg} flex items-center justify-center`}>
-                      <div className="w-1.5 h-1.5 bg-white rounded-full shadow-inner" />
-                   </div>
-                   <p className={`text-[13px] font-bold ${style.msgColor} truncate`}>{toast.message}</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] pointer-events-none flex flex-col items-center no-print px-4 w-full max-w-sm">
+      <motion.div
+        key={toast.id}
+        initial={{ opacity: 0, y: -20, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -16, scale: 0.96, transition: { duration: 0.15 } }}
+        onClick={onDismiss}
+        className="pointer-events-auto cursor-pointer flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-black text-white dark:bg-white dark:text-black border border-zinc-700/80 dark:border-zinc-300 shadow-xl backdrop-blur-md transition-all active:scale-95"
+      >
+        <div className="w-6 h-6 rounded-full bg-zinc-800 dark:bg-zinc-200 flex items-center justify-center shrink-0">
+          {renderIcon()}
+        </div>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-xs font-bold tracking-tight whitespace-nowrap">
+            {toast.title}
+          </span>
+          {toast.message && (
+            <span className="text-[11px] text-zinc-300 dark:text-zinc-600 truncate max-w-[170px] font-medium border-l border-zinc-700 dark:border-zinc-300 pl-1.5">
+              {toast.message}
+            </span>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 };
+

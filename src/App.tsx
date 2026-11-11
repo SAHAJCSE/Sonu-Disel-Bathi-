@@ -6,7 +6,7 @@ import React, {
   useMemo,
 } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase.ts';
 import {
   Search,
@@ -72,8 +72,6 @@ import { ActionFeedbackToast, ActionToastData } from './components/ActionFeedbac
 import { audioFeedback } from './utils/audioFeedback.ts';
 import { useDebounce } from './hooks/useDebounce.ts';
 import { ProductStructuredData } from './components/ProductStructuredData.tsx';
-import { WelcomePage } from './components/WelcomePage.tsx';
-import { AuthPage } from './components/AuthPage.tsx';
 import { ProductSkeleton } from './components/ProductSkeleton.tsx';
 
 const HERO_WORKSHOP_IMAGE =
@@ -270,14 +268,6 @@ function SonuBhattiAppContent() {
   const [inspectedProduct, setInspectedProduct] = useState<Product | null>(
     null
   );
-  
-  const [appState, setAppState] = useState<'welcome' | 'auth' | 'main'>(() => {
-    if (typeof localStorage !== 'undefined') {
-      const shown = localStorage.getItem('sdb_welcome_shown');
-      return shown ? 'auth' : 'welcome';
-    }
-    return 'welcome';
-  });
 
   useEffect(() => {
     writeCache('sdb_favourites', favourites);
@@ -312,11 +302,6 @@ function SonuBhattiAppContent() {
   const [notifications, setNotifications] = useState<LiveNotification[]>([]);
   const [allOrders, setAllOrders] = useState<CustomerOrder[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [liveToast, setLiveToast] = useState<{
-    title: string;
-    message: string;
-    type: string;
-  } | null>(null);
 
   // Micro-Animations & Audio Feedback Toast State
   const [actionToast, setActionToast] = useState<ActionToastData | null>(null);
@@ -831,11 +816,12 @@ function SonuBhattiAppContent() {
                 newNotif,
                 ...prev.filter((n) => n.id !== newNotif.id),
               ]);
-              setLiveToast({
-                title: newNotif.title,
-                message: newNotif.message,
-                type: newNotif.type,
-              });
+              showActionFeedback(
+                newNotif.title,
+                newNotif.message,
+                'general',
+                'notification'
+              );
             }
           }
 
@@ -848,11 +834,12 @@ function SonuBhattiAppContent() {
             }
             const ord = parsed.payload?.order;
             if (ord) {
-              setLiveToast({
-                title: `New Order #${ord.orderNumber}`,
-                message: `Order for ₹${ord.totalAmount?.toLocaleString('en-IN')} received.`,
-                type: 'order',
-              });
+              showActionFeedback(
+                `New Order #${ord.orderNumber}`,
+                `₹${ord.totalAmount?.toLocaleString('en-IN')}`,
+                'order_placed',
+                'order_placed'
+              );
             }
           }
 
@@ -864,11 +851,12 @@ function SonuBhattiAppContent() {
             }
             const ord = parsed.payload?.order;
             if (ord) {
-              setLiveToast({
-                title: `Order #${ord.orderNumber} Updated`,
-                message: `Status is now: ${ord.status?.toUpperCase()}`,
-                type: 'status',
-              });
+              showActionFeedback(
+                `Order #${ord.orderNumber} Updated`,
+                ord.status?.toUpperCase(),
+                'general',
+                'notification'
+              );
             }
           }
         } catch (err) {
@@ -900,74 +888,84 @@ function SonuBhattiAppContent() {
   useEffect(() => {
     if (!isOnline) return;
 
-    // 1. Listen for Product changes
-    const productsQuery = query(collection(db, 'products'), orderBy('id', 'asc'));
-    const unsubProducts = onSnapshot(productsQuery, (snapshot) => {
+    // 1. Listen for Product changes in real-time across all devices/browsers
+    const unsubProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       const allProducts: Product[] = [];
-      snapshot.forEach((doc) => {
-        allProducts.push(doc.data() as Product);
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && (data.name || data.title)) {
+          allProducts.push({
+            id: Number(data.id) || Number(docSnap.id) || 0,
+            name: String(data.name || data.title || ''),
+            size: data.size || 'Medium',
+            imageUrl: data.imageUrl || data.image || '',
+            price: Number(data.price) || 0,
+            stockQuantity: typeof data.stockQuantity === 'number' ? data.stockQuantity : Number(data.stockQuantity) || 0,
+            burnerType: data.burnerType || 'Commercial Burner',
+            isActive: data.isActive !== false,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString(),
+          });
+        }
       });
-      
+      allProducts.sort((a, b) => Number(a.id) - Number(b.id));
       if (allProducts.length > 0) {
         setAdminProducts(allProducts);
-        setPublicProducts(allProducts.filter(p => p.isActive));
-        
-        // Cache updates
+        const activeProducts = allProducts.filter((p) => p.isActive);
+        setPublicProducts(activeProducts);
         writeCache(CACHE_KEYS.ADMIN_PRODUCTS, allProducts);
-        writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, allProducts.filter(p => p.isActive));
-        
-        console.log(`Firestore Sync: ${allProducts.length} products updated.`);
+        writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, activeProducts);
       }
     }, (error) => {
-      console.warn('Firestore Products listener failed:', error);
+      console.warn('Firestore Products listener error:', error);
     });
 
     // 2. Listen for Settings changes
     const unsubSettings = onSnapshot(collection(db, 'settings'), (snapshot) => {
-      snapshot.forEach((doc) => {
-        if (doc.id === 'global') {
-          const newSettings = doc.data() as BusinessSettings;
+      snapshot.docs.forEach((docSnap) => {
+        if (docSnap.id === 'global') {
+          const newSettings = docSnap.data() as BusinessSettings;
           setSettings(newSettings);
           writeCache(CACHE_KEYS.SETTINGS, newSettings);
-          console.log('Firestore Sync: Business settings updated.');
         }
       });
     }, (error) => {
-      console.warn('Firestore Settings listener failed:', error);
+      console.warn('Firestore Settings listener error:', error);
     });
 
     // 3. Listen for Orders changes
-    const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const unsubOrders = onSnapshot(ordersQuery, (snapshot) => {
-      const allOrders: CustomerOrder[] = [];
-      snapshot.forEach((doc) => {
-        allOrders.push(doc.data() as CustomerOrder);
+    const unsubOrders = onSnapshot(collection(db, 'orders'), (snapshot) => {
+      const allOrdersList: CustomerOrder[] = [];
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as CustomerOrder;
+        if (data && data.orderNumber) {
+          allOrdersList.push(data);
+        }
       });
-      
-      if (allOrders.length > 0) {
-        // Admin view sync
-        setAllOrders(allOrders);
-        console.log(`Firestore Sync: ${allOrders.length} orders updated.`);
+      allOrdersList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (allOrdersList.length > 0) {
+        setAllOrders(allOrdersList);
       }
     }, (error) => {
-      console.warn('Firestore Orders listener failed:', error);
+      console.warn('Firestore Orders listener error:', error);
     });
 
-    // 4. Listen for Stock Movements (Admin only really, but listeners are global)
-    const movementsQuery = query(collection(db, 'movements'), orderBy('createdAt', 'desc'));
-    const unsubMovements = onSnapshot(movementsQuery, (snapshot) => {
-      const allMovements: StockMovement[] = [];
-      snapshot.forEach((doc) => {
-        allMovements.push(doc.data() as StockMovement);
+    // 4. Listen for Stock Movements
+    const unsubMovements = onSnapshot(collection(db, 'movements'), (snapshot) => {
+      const allMovementsList: StockMovement[] = [];
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data() as StockMovement;
+        if (data && data.productId) {
+          allMovementsList.push(data);
+        }
       });
-      
-      if (allMovements.length > 0) {
-        setStockMovements(allMovements);
-        writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, allMovements);
-        console.log(`Firestore Sync: ${allMovements.length} movements updated.`);
+      allMovementsList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      if (allMovementsList.length > 0) {
+        setStockMovements(allMovementsList);
+        writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, allMovementsList);
       }
     }, (error) => {
-      console.warn('Firestore Movements listener failed:', error);
+      console.warn('Firestore Movements listener error:', error);
     });
 
     return () => {
@@ -982,15 +980,17 @@ function SonuBhattiAppContent() {
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
     audioFeedback.play('add_to_cart');
+    const existing = cart.find((item) => item.product.id === product.id);
+    const newQty = existing ? Math.min(product.stockQuantity, existing.quantity + 1) : 1;
     showActionFeedback(
-      'Added to Cart',
-      `${product.name} (₹${product.price.toLocaleString('en-IN')})`,
+      newQty === 1 ? '1 item added to cart' : `${newQty} items in cart`,
+      product.name,
       'cart_add'
     );
     setCart((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id);
-      if (existing) {
-        const nextQty = Math.min(product.stockQuantity, existing.quantity + 1);
+      const ex = prev.find((item) => item.product.id === product.id);
+      if (ex) {
+        const nextQty = Math.min(product.stockQuantity, ex.quantity + 1);
         return prev.map((item) =>
           item.product.id === product.id
             ? { product, quantity: nextQty }
@@ -1010,19 +1010,14 @@ function SonuBhattiAppContent() {
     if (currentItem && !isCartOpen) {
       if (newQty > currentItem.quantity) {
         audioFeedback.play('add_to_cart');
-        showActionFeedback(
-          'Quantity Increased',
-          `${currentItem.product.name} (${newQty})`,
-          'cart_update'
-        );
       } else {
         audioFeedback.play('remove_from_cart');
-        showActionFeedback(
-          'Quantity Decreased',
-          `${currentItem.product.name} (${newQty})`,
-          'cart_update'
-        );
       }
+      showActionFeedback(
+        `${newQty} ${newQty === 1 ? 'item' : 'items'} in cart`,
+        currentItem.product.name,
+        newQty > currentItem.quantity ? 'cart_add' : 'cart_update'
+      );
     }
     setCart((prev) =>
       prev.map((item) =>
@@ -1158,6 +1153,8 @@ function SonuBhattiAppContent() {
               writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, updated);
               return updated;
             });
+            // Direct Firestore broadcast for instant multi-browser live sync
+            void setDoc(doc(db, 'products', String(serverProduct.id)), serverProduct);
           }
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
@@ -1235,6 +1232,7 @@ function SonuBhattiAppContent() {
           body: JSON.stringify({ ...finalData, clientActionId }),
         });
         if (res.ok) {
+          void setDoc(doc(db, 'products', String(productId)), finalData, { merge: true });
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
@@ -1263,17 +1261,20 @@ function SonuBhattiAppContent() {
       `${actionType} ${amount} units for #${productId}`,
       'stock_change'
     );
+    const target = adminProducts.find((p) => p.id === productId);
+    const nextStock = target
+      ? actionType === 'ADD'
+        ? target.stockQuantity + amount
+        : actionType === 'REMOVE'
+        ? Math.max(0, target.stockQuantity - amount)
+        : Math.max(0, amount)
+      : amount;
+
     // 1. Instant optimistic stock update
     setAdminProducts((prev) => {
       const updated = prev.map((p) => {
         if (p.id !== productId) return p;
-        const nextQty =
-          actionType === 'ADD'
-            ? p.stockQuantity + amount
-            : actionType === 'REMOVE'
-            ? Math.max(0, p.stockQuantity - amount)
-            : Math.max(0, amount);
-        return { ...p, stockQuantity: nextQty, updatedAt: new Date().toISOString() };
+        return { ...p, stockQuantity: nextStock, updatedAt: new Date().toISOString() };
       });
       writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
       const activeOnly = updated.filter((p) => p.isActive);
@@ -1294,6 +1295,9 @@ function SonuBhattiAppContent() {
           body: JSON.stringify({ actionType, amount, note, clientActionId }),
         });
         if (res.ok) {
+          const resData = await res.json().catch(() => null);
+          const finalStock = resData?.product?.stockQuantity ?? nextStock;
+          void setDoc(doc(db, 'products', String(productId)), { stockQuantity: finalStock }, { merge: true });
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
@@ -1338,6 +1342,7 @@ function SonuBhattiAppContent() {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${authToken}` },
         });
+        void deleteDoc(doc(db, 'products', String(productId)));
         void fetchAdminDashboard(authToken);
         void fetchPublicCatalogue();
         return;
@@ -1531,6 +1536,8 @@ function SonuBhattiAppContent() {
     selectedSize,
     maxPriceLimit,
     sortBy,
+    showFavouritesOnly,
+    favourites,
   ]);
 
   const hasActiveFilters =
@@ -1582,22 +1589,8 @@ function SonuBhattiAppContent() {
         <Settings className="w-6 h-6 text-zinc-900 dark:text-zinc-50" />
       </motion.button>
 
-      {/* Auth/Welcome Viewports */}
-      {appState === 'welcome' && (
-        <WelcomePage
-          onComplete={() => {
-            localStorage.setItem('sdb_welcome_shown', 'true');
-            setAppState('auth');
-          }}
-        />
-      )}
-      {appState === 'auth' && (
-        <AuthPage onAuthSuccess={() => setAppState('main')} />
-      )}
-
       {/* Main Viewport */}
-      {appState === 'main' && (
-        <main className="flex-1 pb-32 pt-20">
+      <main className="flex-1 pb-32 pt-20">
         {viewMode === 'admin_login' && (
           <AdminLoginView
             onLoginSuccess={(token, adm) => {
@@ -1652,14 +1645,14 @@ function SonuBhattiAppContent() {
         {viewMode === 'public' && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-7 space-y-5 sm:space-y-7">
             {/* =============================================================== */}
-            {/* HERO SECTION: OFFICIAL SONU DIESEL BHATTHI BANNER (BORDERLESS)  */}
+            {/* HERO SECTION: OFFICIAL SONU DIESEL BHATTHI BANNER               */}
             {/* =============================================================== */}
-            <section className="overflow-hidden transition-colors relative">
-              <div className="w-full flex items-center justify-center px-4 py-4 sm:px-10 sm:py-6 transition-colors relative">
+            <section className="overflow-hidden transition-colors relative w-full flex items-center justify-center py-2 sm:py-3">
+              <div className="w-full max-w-2xl flex items-center justify-center p-3 sm:p-6 rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-sm transition-colors">
                 <img
                   src={theme === 'dark' ? HERO_DARK_IMAGE : HERO_WORKSHOP_IMAGE}
-                  alt={settings.businessName || t('brandName')}
-                  className="w-full max-w-2xl max-h-52 sm:max-h-72 object-contain mx-auto mix-blend-multiply dark:mix-blend-normal"
+                  alt={settings.businessName || 'Sonu Diesel Bhatti'}
+                  className="w-full max-h-48 sm:max-h-60 object-contain mx-auto"
                 />
               </div>
             </section>
@@ -1846,18 +1839,26 @@ function SonuBhattiAppContent() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-                      {t('noProductsFound')}
+                      {showFavouritesOnly ? 'No Favourites Yet' : t('noProductsFound')}
                     </h3>
-                    <p className="text-xs text-zinc-500">
-                      Try adjusting your filters, budget, or search terms.
+                    <p className="text-xs text-zinc-500 max-w-sm px-4">
+                      {showFavouritesOnly
+                        ? 'Tap the heart icon on any bhatti to save and compare your favourite commercial burners.'
+                        : 'Try adjusting your filters, budget, or search terms.'}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={resetAllCatalogueFilters}
+                    onClick={() => {
+                      if (showFavouritesOnly) {
+                        setShowFavouritesOnly(false);
+                      } else {
+                        resetAllCatalogueFilters();
+                      }
+                    }}
                     className="px-5 py-2 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-bold transition-all hover:opacity-90 active:scale-95 cursor-pointer"
                   >
-                    {t('resetFilters')}
+                    {showFavouritesOnly ? 'View All Products' : t('resetFilters')}
                   </button>
                 </div>
               ) : (
@@ -1871,6 +1872,8 @@ function SonuBhattiAppContent() {
                   {filteredProducts.map((product) => {
                     const outOfStock = product.stockQuantity <= 0;
                     const isFav = favourites.includes(product.id);
+                    const cartEntry = cart.find((c) => c.product.id === product.id);
+                    const quantityInCart = cartEntry ? cartEntry.quantity : 0;
 
                     return (
                       <motion.article
@@ -1882,40 +1885,59 @@ function SonuBhattiAppContent() {
                         transition={{ duration: 0.2 }}
                         whileHover={{ y: -3 }}
                         onClick={() => setInspectedProduct(product)}
-                        className="group bg-[#18181b] rounded-[28px] p-3.5 border border-zinc-800/80 flex flex-col shadow-xl hover:shadow-2xl cursor-pointer transition-all duration-300"
+                        className="group bg-zinc-900/90 dark:bg-zinc-900 text-white rounded-[28px] p-3.5 border border-zinc-200/20 dark:border-zinc-800/80 flex flex-col shadow-xl hover:shadow-2xl cursor-pointer transition-all duration-300"
                       >
-                        {/* Image Container with Apple-style rounded light background & heart button */}
-                        <div className="relative aspect-square bg-[#f4f4f5] dark:bg-zinc-800/90 rounded-[22px] overflow-hidden mb-3.5 flex items-center justify-center p-3">
+                        {/* Image Container with Full Image coverage & Heart Button */}
+                        <div className="relative aspect-square w-full bg-zinc-800/90 rounded-[22px] overflow-hidden mb-3.5 flex items-center justify-center">
                           <ProductImage
                             src={product.imageUrl}
                             alt={product.name}
                             sizeLabel={product.size}
-                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                            fitMode="cover"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
+
+                          {/* Stock Count Circle Badge ("Show stock count on products with circle bg") */}
+                          <div
+                            className={`absolute top-2.5 left-2.5 w-9 h-9 rounded-full backdrop-blur-md flex flex-col items-center justify-center shadow-lg z-10 select-none border ${
+                              outOfStock
+                                ? 'bg-black/85 text-zinc-400 border-zinc-700/60'
+                                : 'bg-black/75 text-white border-white/20'
+                            }`}
+                            title={outOfStock ? 'Out of stock' : `${product.stockQuantity} in stock`}
+                          >
+                            <span className="text-[11px] font-mono font-bold leading-tight">
+                              {outOfStock ? '0' : product.stockQuantity}
+                            </span>
+                            <span className="text-[7px] uppercase font-bold tracking-tight text-zinc-300 leading-none">
+                              {outOfStock ? 'out' : 'qty'}
+                            </span>
+                          </div>
 
                           {/* Favourite Heart Button */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              const isNowFav = !isFav;
                               setFavourites((prev) =>
                                 isFav
                                   ? prev.filter((id) => id !== product.id)
                                   : [...prev, product.id]
                               );
                               showActionFeedback(
-                                isFav ? 'Removed from Favourites' : 'Added to Favourites',
+                                isNowFav ? 'Added to Favourites' : 'Removed from Favourites',
                                 product.name,
-                                'general',
+                                isNowFav ? 'favorite_add' : 'favorite_remove',
                                 'favorite'
                               );
                             }}
-                            className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all shadow-md z-10"
+                            className="absolute top-2.5 right-2.5 w-9 h-9 rounded-full bg-black/60 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:scale-110 active:scale-95 transition-all shadow-md z-10"
                             aria-label="Toggle favourite"
                           >
                             <Heart
                               className={`w-4 h-4 transition-colors ${
-                                isFav ? 'fill-red-500 text-red-500' : 'text-white'
+                                isFav ? 'fill-white text-white' : 'text-white/80'
                               }`}
                             />
                           </button>
@@ -1930,30 +1952,65 @@ function SonuBhattiAppContent() {
                             {product.size} • {product.burnerType || 'Commercial Burner'}
                           </p>
 
-                          {/* Price and Cart Button */}
-                          <div className="mt-3.5 pt-1 flex items-center justify-between">
+                          {/* Price and Cart Button (Expands to Stepper when in cart) */}
+                          <div className="mt-3.5 pt-1 flex items-center justify-between gap-2">
                             <div>
                               <span className="text-lg sm:text-xl font-black text-white tracking-tight">
                                 ₹{product.price.toLocaleString('en-IN')}
                               </span>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                addToCart(product);
-                              }}
-                              disabled={outOfStock}
-                              aria-label={outOfStock ? 'Out of stock' : 'Add to cart'}
-                              className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all shadow-md ${
-                                outOfStock
-                                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                                  : 'bg-white text-zinc-950 hover:bg-zinc-100 active:scale-95 cursor-pointer'
-                              }`}
-                            >
-                              <ShoppingBag className="w-5 h-5" />
-                            </button>
+                            {quantityInCart > 0 ? (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-10 px-2 rounded-2xl bg-white text-zinc-950 flex items-center gap-1.5 shadow-md border border-zinc-200 shrink-0"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateCartQty(product.id, quantityInCart - 1);
+                                  }}
+                                  className="w-7 h-7 rounded-xl bg-zinc-100 hover:bg-zinc-200 active:scale-90 text-zinc-900 flex items-center justify-center transition-all cursor-pointer font-bold"
+                                  aria-label="Decrease quantity"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="font-bold font-mono text-sm px-1 min-w-[18px] text-center text-zinc-950">
+                                  {quantityInCart}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={quantityInCart >= product.stockQuantity}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateCartQty(product.id, quantityInCart + 1);
+                                  }}
+                                  className="w-7 h-7 rounded-xl bg-zinc-950 hover:bg-zinc-800 active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all cursor-pointer font-bold"
+                                  aria-label="Increase quantity"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(product);
+                                }}
+                                disabled={outOfStock}
+                                aria-label={outOfStock ? 'Out of stock' : 'Add to cart'}
+                                className={`h-10 px-3.5 rounded-2xl flex items-center gap-1.5 transition-all shadow-md font-bold text-xs shrink-0 ${
+                                  outOfStock
+                                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                    : 'bg-white text-zinc-950 hover:bg-zinc-100 active:scale-95 cursor-pointer'
+                                }`}
+                              >
+                                <ShoppingBag className="w-4 h-4" />
+                                <span>Add</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </motion.article>
@@ -1968,7 +2025,6 @@ function SonuBhattiAppContent() {
         {/* Dedicated bottom scroll clearance spacer so no card is ever hidden behind the fixed bottom bar */}
         <div className="h-24 w-full shrink-0 no-print" aria-hidden="true" />
       </main>
-    )}
 
       {/* =================================================================== */}
       {/* DETAILED PRODUCT SPECIFICATION SHEET MODAL (MATCHING ATTACHED UI)   */}
@@ -2025,100 +2081,114 @@ function SonuBhattiAppContent() {
         )}
       </AnimatePresence>
 
-      {/* Live Push Notification Floating Banner */}
-      <AnimatePresence>
-        {liveToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -15, scale: 0.95 }}
-            onClick={() => setLiveToast(null)}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 min-w-[280px] max-w-sm p-4 rounded-[2rem] bg-indigo-50 text-indigo-900 border-2 border-indigo-100 shadow-2xl flex items-center gap-4 cursor-pointer ring-1 ring-white/20 transition-all"
-          >
-            <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shrink-0">
-               <div className="grid grid-cols-3 grid-rows-3 gap-0.5 w-4 h-4">
-                  <div className="bg-white col-start-1 row-start-1" />
-                  <div className="bg-white col-start-3 row-start-1" />
-                  <div className="bg-white col-start-1 row-start-2" />
-                  <div className="bg-white col-start-2 row-start-2" />
-                  <div className="bg-white col-start-3 row-start-2" />
-               </div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <h5 className="text-base font-black text-indigo-950 leading-tight">
-                {liveToast.title}
-              </h5>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="w-3.5 h-3.5 rounded-full bg-indigo-500 flex items-center justify-center">
-                  <div className="w-1.5 h-1.5 bg-white rounded-full shadow-inner" />
-                </div>
-                <p className="text-[13px] font-bold text-indigo-700 truncate leading-snug">
-                  {liveToast.message}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLiveToast(null);
-              }}
-              className="text-indigo-400 hover:text-indigo-950 p-1 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* =================================================================== */}
       {/* OFFLINE & AUTOMATIC SYNC INDICATOR (Positioned above bottom nav)    */}
       {/* =================================================================== */}
       {!isOnline && (
-        <div className="fixed bottom-20 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg max-w-md no-print">
-          <WifiOff className="w-4 h-4 text-[#00C1FD] shrink-0" />
+        <div className="fixed bottom-16 left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-zinc-950 border border-zinc-800 px-3.5 py-2 text-xs font-semibold text-white shadow-xl max-w-md no-print">
+          <WifiOff className="w-4 h-4 text-zinc-400 shrink-0" />
           <span>{t('offlineBanner')}</span>
         </div>
       )}
 
       {isOnline && syncToast && (
-        <div className="fixed bottom-20 left-4 z-50 flex items-center gap-2.5 rounded-lg bg-zinc-900 border border-zinc-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg no-print">
+        <div className="fixed bottom-16 left-4 z-50 flex items-center gap-2.5 rounded-2xl bg-zinc-950 border border-zinc-800 px-3.5 py-2 text-xs font-semibold text-white shadow-xl no-print">
           {isSyncing ? (
-            <RefreshCw className="w-4 h-4 text-[#00C1FD] animate-spin shrink-0" />
+            <RefreshCw className="w-4 h-4 text-zinc-400 animate-spin shrink-0" />
           ) : (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-zinc-200 shrink-0" />
           )}
           <span>{syncToast}</span>
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] px-3 py-2 no-print transition-colors">
-        <div className="max-w-md mx-auto bg-stone-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full py-1 px-3 flex items-center justify-around text-[10px] font-bold text-zinc-600 dark:text-zinc-400 transition-colors">
+      {/* Floating Bottom Navigation Bar (Minimal Black & White Theme with Rounded Borders) */}
+      <nav className="fixed bottom-3 left-0 right-0 z-40 px-3 pointer-events-none no-print">
+        <div className="max-w-[340px] sm:max-w-sm mx-auto pointer-events-auto bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl border border-zinc-300/80 dark:border-zinc-800 rounded-full p-1.5 flex items-center justify-between shadow-2xl transition-all">
+          {/* Home Tab */}
           <button
             type="button"
-            onClick={() => handleNavigate('public')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-full transition-colors ${viewMode === 'public' ? 'text-zinc-950 dark:text-zinc-50' : ''}`}
+            onClick={() => {
+              handleNavigate('public');
+              setShowFavouritesOnly(false);
+            }}
+            className={`flex-1 py-1.5 px-2 rounded-full flex flex-col items-center justify-center transition-all duration-200 cursor-pointer ${
+              viewMode === 'public' && !showFavouritesOnly
+                ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+            }`}
+            aria-label="Home Catalogue"
           >
-            <LayoutGrid className="w-5 h-5" />
-            <span>Home</span>
+            <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-[10px] font-bold tracking-tight mt-0.5">Home</span>
           </button>
 
+          {/* Favourites Tab (Toggles grid view visibility between all products and favourited items only) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (viewMode !== 'public') handleNavigate('public');
+              setShowFavouritesOnly((prev) => !prev);
+            }}
+            className={`flex-1 py-1.5 px-2 rounded-full flex flex-col items-center justify-center transition-all duration-200 cursor-pointer relative ${
+              viewMode === 'public' && showFavouritesOnly
+                ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+            }`}
+            aria-label="Toggle Favourites Filter"
+          >
+            <div className="relative">
+              <Heart
+                className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${
+                  showFavouritesOnly ? 'fill-current scale-105' : ''
+                }`}
+              />
+              {favourites.length > 0 && (
+                <span
+                  className={`absolute -top-1 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full text-[9px] font-mono font-bold flex items-center justify-center leading-none border ${
+                    viewMode === 'public' && showFavouritesOnly
+                      ? 'bg-white text-zinc-950 dark:bg-zinc-950 dark:text-white border-zinc-900 dark:border-white'
+                      : 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 border-white/40 dark:border-zinc-900'
+                  }`}
+                >
+                  {favourites.length}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-bold tracking-tight mt-0.5">Favourites</span>
+          </button>
+
+          {/* Cart Tab */}
           <button
             type="button"
             onClick={() => setIsCartOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-zinc-600 dark:text-zinc-400"
+            className="flex-1 py-1.5 px-2 rounded-full flex flex-col items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 transition-all duration-200 cursor-pointer relative"
+            aria-label="Open Cart"
           >
-            <ShoppingBag className="w-5 h-5" />
-            <span>Cart</span>
+            <div className="relative">
+              <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
+              {totalCartItems > 0 && (
+                <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 text-[9px] font-mono font-bold flex items-center justify-center leading-none border border-white/40 dark:border-zinc-900">
+                  {totalCartItems}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-bold tracking-tight mt-0.5">Cart</span>
           </button>
 
+          {/* Admin Tab */}
           <button
             type="button"
             onClick={() => handleNavigate(currentAdmin ? 'admin_dashboard' : 'admin_login')}
-            className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-full text-zinc-600 dark:text-zinc-400"
+            className={`flex-1 py-1.5 px-2 rounded-full flex flex-col items-center justify-center transition-all duration-200 cursor-pointer ${
+              viewMode === 'admin_dashboard' || viewMode === 'admin_login'
+                ? 'bg-zinc-950 text-white dark:bg-white dark:text-zinc-950 shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100'
+            }`}
+            aria-label="Admin Portal"
           >
-            <Lock className="w-5 h-5" />
-            <span>Admin</span>
+            <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="text-[10px] font-bold tracking-tight mt-0.5">Admin</span>
           </button>
         </div>
       </nav>
