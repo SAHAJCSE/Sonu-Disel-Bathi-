@@ -1501,7 +1501,9 @@ function SonuBhattiAppContent() {
       .filter((p) => {
         const matchesSize =
           selectedSize === 'ALL' ||
-          p.size.toLowerCase() === selectedSize.toLowerCase();
+          p.size.toLowerCase() === selectedSize.toLowerCase() ||
+          p.name.toLowerCase().includes(selectedSize.toLowerCase()) ||
+          (p.burnerType && p.burnerType.toLowerCase().includes(selectedSize.toLowerCase()));
 
         const matchesSearch =
           !q ||
@@ -1781,12 +1783,19 @@ function SonuBhattiAppContent() {
                     onChange={(e) => setSelectedSize(e.target.value)}
                     className="w-full pl-9 pr-8 py-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-950/50 text-[13px] font-bold text-zinc-900 dark:text-zinc-50 focus:outline-none focus:border-zinc-900 transition-all cursor-pointer appearance-none shadow-xs"
                   >
-                    <option value="ALL">{t('filterAllSizes')} ({getSizeCount('ALL')})</option>
-                    {['Small', 'Medium', 'Large', 'Extra Large'].map((sz) => (
-                      <option key={sz} value={sz}>
-                        {translateSize(sz)} ({getSizeCount(sz)})
-                      </option>
-                    ))}
+                    <option value="ALL">All Categories ({activePublicProducts.length})</option>
+                    <option value="Halwai">Halwai Family Function</option>
+                    <option value="Small Party">Small Party & Gathering</option>
+                    <option value="Big Party">Big Party & Wedding</option>
+                    <option value="Restaurant">Restaurants & Commercial Kitchens</option>
+                    <option value="Industry">Industry Work</option>
+                    <option value="Street Food">Street Food & Fast Food</option>
+                    <option value="Donation">Gurudwara / Mandir Donation</option>
+                    <option value="Personal">Personal Use</option>
+                    <option value="Small">Small Bhatti</option>
+                    <option value="Medium">Medium Bhatti</option>
+                    <option value="Large">Large Bhatti</option>
+                    <option value="Extra Large">Extra Large Bhatti</option>
                   </select>
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <ChevronRight className="w-4 h-4 text-zinc-400 rotate-90" />

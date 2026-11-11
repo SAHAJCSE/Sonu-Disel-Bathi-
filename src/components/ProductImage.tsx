@@ -22,9 +22,18 @@ export const ProductImage: React.FC<ProductImageProps> = ({
 }) => {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState<string | null>(src || null);
+
+  React.useEffect(() => {
+    setCurrentSrc(src || null);
+    setError(false);
+    setLoaded(false);
+    setRetryCount(0);
+  }, [src]);
 
   // If src is temporarily missing or undefined, render a refined loading skeleton
-  if (!src) {
+  if (!currentSrc) {
     return (
       <div
         className={`relative overflow-hidden bg-zinc-900/60 flex flex-col items-center justify-center p-4 text-center select-none ${className}`}
@@ -43,7 +52,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     );
   }
 
-  // If the image fails to load, render a clean minimal fallback with burner icon
+  // If the image fails to load after retry, render a clean minimal fallback with burner icon
   if (error) {
     return (
       <div
@@ -73,14 +82,22 @@ export const ProductImage: React.FC<ProductImageProps> = ({
         </div>
       )}
       <img
-        src={src}
+        src={currentSrc}
         alt={alt}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => {
-          console.warn(`ProductImage load failed for ${src}`);
-          setError(true);
+          if (retryCount < 2) {
+            console.warn(`ProductImage load failed for ${currentSrc}, retrying (${retryCount + 1})...`);
+            setRetryCount((prev) => prev + 1);
+            // Append cache-busting timestamp for robust cross-browser reload
+            const separator = currentSrc.includes('?') ? '&' : '?';
+            setCurrentSrc(`${currentSrc.split('?')[0]}${separator}retry=${Date.now()}`);
+          } else {
+            console.warn(`ProductImage load failed permanently for ${currentSrc}`);
+            setError(true);
+          }
         }}
         className={`w-full h-full ${
           fitMode === 'cover' ? 'object-cover' : 'object-contain'
