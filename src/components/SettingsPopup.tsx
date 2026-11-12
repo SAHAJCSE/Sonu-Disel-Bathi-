@@ -8,7 +8,8 @@ import {
   VolumeX, 
   Globe, 
   LogOut, 
-  Settings 
+  Settings,
+  MapPin
 } from 'lucide-react';
 import { useTranslation } from '../i18n/LanguageContext.tsx';
 import { LANGUAGE_META, LanguageCode } from '../i18n/translations.ts';
@@ -24,6 +25,7 @@ interface SettingsPopupProps {
   onChangeLang: (code: LanguageCode) => void;
   isLoggedIn: boolean;
   onLogout: () => void;
+  onNavigateAbout: () => void;
 }
 
 export const SettingsPopup: React.FC<SettingsPopupProps> = ({
@@ -37,6 +39,7 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onChangeLang,
   isLoggedIn,
   onLogout,
+  onNavigateAbout,
 }) => {
   const { t } = useTranslation();
 
@@ -160,49 +163,22 @@ export const SettingsPopup: React.FC<SettingsPopupProps> = ({
                   </button>
                 </div>
               )}
-              {/* About Us & Business Info */}
-              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">About Us & Location</span>
-                <div className="p-3 rounded-xl bg-stone-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 flex items-center justify-center shrink-0 font-black text-xs">
-                      🔥
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-black tracking-tight">Sonu Diesel Bhatti</h4>
-                      <p className="text-[10px] font-mono text-zinc-500">Since 2000 • Est. 24 Years</p>
-                    </div>
+              {/* About Us Navigation Button */}
+              <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onNavigateAbout();
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-900 dark:hover:border-zinc-100 transition-all cursor-pointer group bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-4 h-4 text-red-500 fill-current" />
+                    <span className="text-xs font-bold tracking-tight">About Us &amp; Workshop Location</span>
                   </div>
-
-                  <div className="rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-900">
-                    <img
-                      src="/assets/aistudio/1794425000347_3cba4b42.png"
-                      alt="Sonu Diesel Bhatti Workshop"
-                      className="w-full h-24 object-cover"
-                    />
-                  </div>
-
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug font-medium">
-                    Premier manufacturer of heavy industrial diesel burners, commercial kitchen stoves, halwai wedding bhattis, street food burners, and custom burners.
-                  </p>
-
-                  <div className="pt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-mono space-y-0.5">
-                    <div>🇮🇳 हिंदी: सोनू डीजल भट्टी, भट्टी, कमर्शियल बर्नर</div>
-                    <div>🇵🇦 ਪੰਜਾਬੀ: ਸੋਨੂੰ ਡੀਜ਼ਲ ਭट्टी, ਭੱਠੀ, ਬਰनर</div>
-                  </div>
-
-                  <a
-                    href="https://share.google/1Y5drNjBSzo1T8QJN"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full mt-2 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 text-xs font-bold transition-all shadow-sm cursor-pointer"
-                  >
-                    <svg className="w-3.5 h-3.5 text-red-500 shrink-0 fill-current" viewBox="0 0 24 24">
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                    </svg>
-                    <span>Open Workshop Location</span>
-                  </a>
-                </div>
+                  <span className="font-mono text-xs">→</span>
+                </button>
               </div>
             </div>
 

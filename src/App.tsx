@@ -73,6 +73,7 @@ import { audioFeedback } from './utils/audioFeedback.ts';
 import { useDebounce } from './hooks/useDebounce.ts';
 import { ProductStructuredData } from './components/ProductStructuredData.tsx';
 import { ProductSkeleton } from './components/ProductSkeleton.tsx';
+import { AboutUsPage } from './components/AboutUsPage.tsx';
 
 const HERO_WORKSHOP_IMAGE =
   '/assets/aistudio/2a699790a8a58fccc2585b7051c3cd969c0efb91b5c7046a8963907a3f01ad54.png';
@@ -189,18 +190,18 @@ function writeCache(key: string, value: unknown) {
 function SonuBhattiAppContent() {
   const { lang, setLang, t, translateSize } = useTranslation();
 
-  // View Mode: 'public' | 'admin_login' | 'admin_dashboard'
+  // View Mode: 'public' | 'admin_login' | 'admin_dashboard' | 'about'
   const [viewMode, setViewMode] = useState<
-    'public' | 'admin_login' | 'admin_dashboard'
+    'public' | 'admin_login' | 'admin_dashboard' | 'about'
   >('public');
   const [adminTab, setAdminTab] = useState<'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings'>('inventory');
   
   const [viewHistory, setViewHistory] = useState<
-    { mode: 'public' | 'admin_login' | 'admin_dashboard'; tab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings' }[]
+    { mode: 'public' | 'admin_login' | 'admin_dashboard' | 'about'; tab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings' }[]
   >([]);
 
   const handleNavigate = useCallback(
-    (newMode: 'public' | 'admin_login' | 'admin_dashboard', newTab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings') => {
+    (newMode: 'public' | 'admin_login' | 'admin_dashboard' | 'about', newTab?: 'inventory' | 'smart_entry' | 'history' | 'orders' | 'settings') => {
       if (newMode === viewMode && (!newTab || newTab === adminTab)) return;
       
       setViewHistory((prev) => [...prev, { mode: viewMode, tab: adminTab }]);
@@ -1644,6 +1645,13 @@ function SonuBhattiAppContent() {
           />
         )}
 
+        {viewMode === 'about' && (
+          <AboutUsPage
+            settings={settings}
+            onBack={() => handleNavigate('public')}
+          />
+        )}
+
         {viewMode === 'public' && (
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-7 space-y-5 sm:space-y-7">
             {/* =============================================================== */}
@@ -2078,6 +2086,7 @@ function SonuBhattiAppContent() {
         onChangeLang={setLang}
         isLoggedIn={!!authToken}
         onLogout={handleSignOut}
+        onNavigateAbout={() => handleNavigate('about')}
       />
 
       <AnimatePresence>
