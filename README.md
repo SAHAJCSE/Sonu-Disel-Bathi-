@@ -66,3 +66,15 @@ This is a privately maintained business project.
 **Digitizing manufacturing. Simplifying operations. Building for growth.**
 
 </div>
+
+<div align="center">
+
+<a href="https://sonu-disel-bathi.vercel.app/">
+  <img src="https://img.shields.io/badge/_VISIT_NOW-Explore_Our_Website-2563EB?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Visit Sonu Diesel Bhatti Website" />
+</a>
+
+<br/>
+
+<img src="https://readme-typing-svg.demolab.com?font=Inter&weight=600&size=16&pause=1000&color=2563EB&center=true&vCenter=true&width=400&lines=Explore+Our+Products;Discover+Sonu+Diesel+Bhatti" alt="Visit our website" />
+
+</div>
