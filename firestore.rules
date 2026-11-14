@@ -30,5 +30,15 @@ service cloud.firestore {
     match /movements/{movementId} {
       allow read, write: if true;
     }
+
+    // Images collection: public read, validated base64 write size (< 900KB)
+    match /images/{imageId} {
+      allow read: if true;
+      allow write: if isValidId(imageId)
+        && request.resource.data.dataBase64 is string
+        && request.resource.data.dataBase64.size() <= 900000
+        && request.resource.data.mimeType is string
+        && request.resource.data.mimeType.size() <= 64;
+    }
   }
 }

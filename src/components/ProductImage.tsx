@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Flame, Image as ImageIcon } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase.ts';
+
+// In-memory cache of resolved /api/images/:id -> data URL for cross-environment rendering (e.g. Vercel static deploy)
+const resolvedImageCache = new Map<string, string>();
 
 interface ProductImageProps {
   src?: string | null;
@@ -23,14 +28,55 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [currentSrc, setCurrentSrc] = useState<string | null>(src || null);
+  const [firestoreChecked, setFirestoreChecked] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState<string | null>(() => {
+    if (!src) return null;
+    return resolvedImageCache.get(src) || src;
+  });
 
-  React.useEffect(() => {
-    setCurrentSrc(src || null);
+  useEffect(() => {
+    const nextSrc = src ? resolvedImageCache.get(src) || src : null;
+    setCurrentSrc(nextSrc);
     setError(false);
     setLoaded(false);
     setRetryCount(0);
+    setFirestoreChecked(false);
   }, [src]);
+
+  const tryResolveFromFirestore = async (originalSrc: string): Promise<boolean> => {
+    const match = originalSrc.match(/^\/api\/images\/([^/?#]+)/);
+    if (!match) return false;
+    const imageId = match[1];
+
+    const cached = resolvedImageCache.get(originalSrc);
+    if (cached) {
+      setCurrentSrc(cached);
+      setLoaded(false);
+      setError(false);
+      return true;
+    }
+
+    try {
+      const snap = await getDoc(doc(db, 'images', imageId));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data?.dataBase64) {
+          const mime = data.mimeType || 'image/webp';
+          const dataUrl = data.dataBase64.startsWith('data:')
+            ? data.dataBase64
+            : `data:${mime};base64,${data.dataBase64}`;
+          resolvedImageCache.set(originalSrc, dataUrl);
+          setCurrentSrc(dataUrl);
+          setLoaded(false);
+          setError(false);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn(`Firestore image lookup failed for images/${imageId}:`, err);
+    }
+    return false;
+  };
 
   // If src is temporarily missing or undefined, render a refined loading skeleton
   if (!currentSrc) {
@@ -52,7 +98,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     );
   }
 
-  // If the image fails to load after retry, render a clean minimal fallback with burner icon
+  // If the image fails to load after retry & Firestore lookup, render a clean minimal fallback
   if (error) {
     return (
       <div
@@ -71,6 +117,30 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     );
   }
 
+  const handleImageError = async () => {
+    // Never append ?retry= query params to data: URLs (it breaks base64 decoding)
+    if (currentSrc.startsWith('data:')) {
+      setError(true);
+      return;
+    }
+
+    // For /api/images/:id paths (which do not exist on static hosts like Vercel), resolve directly from Firestore
+    if (src && src.startsWith('/api/images/') && !firestoreChecked) {
+      setFirestoreChecked(true);
+      const resolved = await tryResolveFromFirestore(src);
+      if (resolved) return;
+    }
+
+    if (retryCount < 2) {
+      setRetryCount((prev) => prev + 1);
+      const cleanBase = currentSrc.split('?')[0];
+      const separator = cleanBase.includes('?') ? '&' : '?';
+      setCurrentSrc(`${cleanBase}${separator}retry=${Date.now()}`);
+    } else {
+      setError(true);
+    }
+  };
+
   return (
     <div className={`relative overflow-hidden bg-zinc-900/40 ${className}`}>
       {/* Loading Skeleton underneath until image is fully rendered */}
@@ -88,16 +158,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
         decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => {
-          if (retryCount < 2) {
-            console.warn(`ProductImage load failed for ${currentSrc}, retrying (${retryCount + 1})...`);
-            setRetryCount((prev) => prev + 1);
-            // Append cache-busting timestamp for robust cross-browser reload
-            const separator = currentSrc.includes('?') ? '&' : '?';
-            setCurrentSrc(`${currentSrc.split('?')[0]}${separator}retry=${Date.now()}`);
-          } else {
-            console.warn(`ProductImage load failed permanently for ${currentSrc}`);
-            setError(true);
-          }
+          void handleImageError();
         }}
         className={`w-full h-full ${
           fitMode === 'cover' ? 'object-cover' : 'object-contain'
@@ -108,4 +169,3 @@ export const ProductImage: React.FC<ProductImageProps> = ({
     </div>
   );
 };
-

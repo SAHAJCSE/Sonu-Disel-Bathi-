@@ -76,6 +76,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "productId", "productName", "changeAmount", "newQuantity", "actionType", "createdAt"]
+    },
+    "StoredImage": {
+      "title": "StoredImage",
+      "description": "Compressed product photograph stored for static-host fallback",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "dataBase64": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["mimeType", "dataBase64"]
     }
   },
   "firestore": {
@@ -98,6 +110,10 @@
     "/movements/{movementId}": {
       "schema": { "$ref": "#/entities/StockMovement" },
       "description": "Real-time stock audit movements"
+    },
+    "/images/{imageId}": {
+      "schema": { "$ref": "#/entities/StoredImage" },
+      "description": "Compressed product images mirrored from backend storage"
     }
   }
 }

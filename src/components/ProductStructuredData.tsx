@@ -23,7 +23,9 @@ export const ProductStructuredData: React.FC<ProductStructuredDataProps> = ({
       'item': {
         '@type': 'Product',
         'name': product.name,
-        'image': product.imageUrl.startsWith('http') ? product.imageUrl : `${baseUrl}${product.imageUrl}`,
+        'image': product.imageUrl.startsWith('http') || product.imageUrl.startsWith('data:')
+          ? product.imageUrl
+          : `${baseUrl}${product.imageUrl}`,
         'description': `${product.name} - Sonu Diesel Bhatti commercial cooking furnaces, stoves, and bhattis used for commercial cooking, dhabas, and industrial heating. Size: ${product.size}. सोनू डीजल भट्टी, कमर्शियल भट्टी, stoves, furnaces.`,
         'sku': `SDB-${product.id}`,
         'brand': {

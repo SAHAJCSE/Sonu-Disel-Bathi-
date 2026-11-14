@@ -7,6 +7,32 @@
         var NativeWebSocket = window.WebSocket;
         if (NativeWebSocket) {
           var WrappedWebSocket = function(url, protocols) {
+            var isViteHmr =
+              protocols === 'vite-hmr' ||
+              (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1);
+            if (isViteHmr) {
+              return {
+                url: String(url || ''),
+                protocol: 'vite-hmr',
+                CONNECTING: 0,
+                OPEN: 1,
+                CLOSING: 2,
+                CLOSED: 3,
+                readyState: 1,
+                bufferedAmount: 0,
+                extensions: '',
+                binaryType: 'blob',
+                onopen: null,
+                onmessage: null,
+                onerror: null,
+                onclose: null,
+                addEventListener: function() {},
+                removeEventListener: function() {},
+                dispatchEvent: function() { return true; },
+                send: function() {},
+                close: function() {}
+              };
+            }
             try {
               var ws = protocols ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
               ws.addEventListener('error', function(e) {
@@ -16,9 +42,12 @@
               }, true);
               return ws;
             } catch (err) {
-              // Return a dummy object if WebSocket fails to instantiate (common in some restricted environments)
-              console.warn('WebSocket instantiation blocked or failed.');
               return {
+                CONNECTING: 0,
+                OPEN: 1,
+                CLOSING: 2,
+                CLOSED: 3,
+                readyState: 3,
                 addEventListener: function() {},
                 removeEventListener: function() {},
                 send: function() {},

@@ -52,10 +52,12 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    if (!ctx) return null;
+    if (!ctx || !pixelCrop) return null;
 
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    const maxWidth = 960;
+    const scale = pixelCrop.width > maxWidth ? maxWidth / pixelCrop.width : 1;
+    canvas.width = Math.max(1, Math.round(pixelCrop.width * scale));
+    canvas.height = Math.max(1, Math.round(pixelCrop.height * scale));
 
     ctx.drawImage(
       image,
@@ -65,11 +67,15 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
       pixelCrop.height,
       0,
       0,
-      pixelCrop.width,
-      pixelCrop.height
+      canvas.width,
+      canvas.height
     );
 
-    return canvas.toDataURL('image/webp', 0.85);
+    const webp = canvas.toDataURL('image/webp', 0.84);
+    if (webp.startsWith('data:image/webp')) {
+      return webp;
+    }
+    return canvas.toDataURL('image/jpeg', 0.84);
   };
 
   const handleDone = async () => {
@@ -137,16 +143,22 @@ export const ImageCropperModal: React.FC<ImageCropperModalProps> = ({
             <p className="text-[10px] text-zinc-500 font-medium italic">
               * Align the product within the frame for a consistent catalogue look.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => onCropComplete(image)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all cursor-pointer shadow-sm"
+              >
+                Skip &amp; Use Original
+              </button>
               <button
                 onClick={onCancel}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition-colors"
+                className="px-3 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDone}
-                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95"
+                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-2 shadow-lg transition-all active:scale-95 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
                 <span>Apply Crop</span>

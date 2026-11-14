@@ -79,10 +79,39 @@ async function syncCatalogueToFirestore() {
     const snapshot = await getDocs(collection(clientDb, 'products'));
     snapshot.docs.forEach((d) => batch.delete(d.ref));
     
-    productsList.forEach((product) => {
+    for (const product of productsList) {
+      const normalized = normalizeForFirestore(product);
+
+      // Resolve /api/images/:id to a self-contained data URL in Firestore AND mirror into images/{id}
+      // so static deployments (like Vercel) render product photos with zero backend dependency.
+      if (typeof normalized.imageUrl === 'string') {
+        const match = normalized.imageUrl.match(/^\/api\/images\/(\d+)/);
+        if (match) {
+          const imageId = Number(match[1]);
+          const img = await getImageById(imageId);
+          if (img?.dataBase64) {
+            const mime = img.mimeType || 'image/webp';
+            const cleanBase64 = img.dataBase64.includes('base64,')
+              ? img.dataBase64.split('base64,')[1]
+              : img.dataBase64;
+            if (cleanBase64.length <= 850_000) {
+              batch.set(doc(clientDb, 'images', String(imageId)), {
+                id: imageId,
+                mimeType: mime,
+                dataBase64: cleanBase64,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+            if (cleanBase64.length <= 700_000) {
+              normalized.imageUrl = `data:${mime};base64,${cleanBase64}`;
+            }
+          }
+        }
+      }
+
       const docRef = doc(clientDb, 'products', String(product.id));
-      batch.set(docRef, normalizeForFirestore(product));
-    });
+      batch.set(docRef, normalized);
+    }
     
     await batch.commit();
     console.log(`Catalogue synced to Firestore successfully (${productsList.length} items).`);
@@ -1443,7 +1472,17 @@ app.post('/api/images/upload', requireAdmin, async (req: AuthRequest, res: Respo
     if (!dataBase64) {
       return res.status(400).json({ error: 'dataBase64 is required' });
     }
-    const stored = await storeImageBytes(dataBase64, filename || 'product.jpg', mimeType || 'image/jpeg');
+    const cleanMime = mimeType || 'image/jpeg';
+    const stored = await storeImageBytes(dataBase64, filename || 'product.jpg', cleanMime);
+    const cleanBase64 = stored.dataBase64;
+    if (cleanBase64 && cleanBase64.length <= 850_000) {
+      void setDoc(doc(clientDb, 'images', String(stored.id)), {
+        id: stored.id,
+        mimeType: cleanMime,
+        dataBase64: cleanBase64,
+        updatedAt: new Date().toISOString(),
+      }).catch((err) => console.warn('Failed to mirror uploaded image to Firestore:', err));
+    }
     const imageUrl = `/api/images/${stored.id}`;
     res.json({ success: true, imageId: stored.id, imageUrl });
   } catch (error: any) {
@@ -1454,10 +1493,17 @@ app.post('/api/images/upload', requireAdmin, async (req: AuthRequest, res: Respo
 
 app.get('/api/images/:id', async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    if (isNaN(id)) return res.status(400).send('Invalid image ID');
+    const param = req.params.id;
+    const id = Number(param);
+    if (isNaN(id)) {
+      // If it's not a number, maybe it's a filename or path forwarded
+      return res.redirect(`/images/${param}`);
+    }
     const img = await getImageById(id);
-    if (!img) return res.status(404).send('Image not found');
+    if (!img) {
+      // Fallback placeholder image or redirect to default bhatti photo
+      return res.redirect('/images/bhatti_medium_model_1794033586446.jpg');
+    }
     const buf = Buffer.from(img.dataBase64, 'base64');
     res.setHeader('Content-Type', img.mimeType || 'image/jpeg');
     res.setHeader('Content-Length', buf.length);
@@ -1465,7 +1511,7 @@ app.get('/api/images/:id', async (req: Request, res: Response) => {
     res.send(buf);
   } catch (error: any) {
     console.error(`Error in GET /api/images/${req.params.id}:`, error);
-    res.status(500).send('Failed to load image from database');
+    res.redirect('/images/bhatti_medium_model_1794033586446.jpg');
   }
 });
 

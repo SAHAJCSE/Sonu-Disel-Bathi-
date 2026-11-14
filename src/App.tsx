@@ -7,7 +7,8 @@ import React, {
 } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './lib/firebase.ts';
+import { db, auth } from './lib/firebase.ts';
+import { compressDataUrl } from './utils/imageUtils.ts';
 import {
   Search,
   ShoppingBag,
@@ -43,6 +44,7 @@ import {
   Sun,
   Moon,
   Settings,
+  AlertCircle,
 } from 'lucide-react';
 import {
   AdminProfile,
@@ -168,6 +170,40 @@ const CACHE_KEYS = {
   ADMIN_SESSION: 'sdb_admin_session_v1',
   OFFLINE_QUEUE: 'sdb_offline_action_queue_v1',
 };
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+) {
+  const errInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+}
 
 function readCache<T>(key: string, fallback: T): T {
   try {
@@ -448,26 +484,42 @@ function SonuBhattiAppContent() {
 
   const uploadImageIfBase64 = async (imageUrl: string, token: string): Promise<string> => {
     if (!imageUrl.startsWith('data:')) return imageUrl;
+
+    // Ensure every uploaded/skipped-crop image is compressed cleanly under Firestore's 1MB limit
+    const compressedDataUrl = await compressDataUrl(imageUrl, 800, 220_000);
+    const mimeMatch = compressedDataUrl.match(/^data:([^;]+);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/webp';
+    const cleanBase64 = compressedDataUrl.includes('base64,')
+      ? compressedDataUrl.split('base64,')[1]
+      : compressedDataUrl;
+
     try {
-      const mimeMatch = imageUrl.match(/^data:([^;]+);/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-      
       const res = await fetch('/api/images/upload', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ dataBase64: imageUrl, mimeType }),
+        body: JSON.stringify({ dataBase64: compressedDataUrl, mimeType }),
       });
       if (res.ok) {
         const json = await res.json();
-        return json.imageUrl;
+        if (json.imageId && cleanBase64.length <= 850_000) {
+          void setDoc(doc(db, 'images', String(json.imageId)), {
+            id: Number(json.imageId),
+            mimeType,
+            dataBase64: cleanBase64,
+            updatedAt: new Date().toISOString(),
+          }).catch((err) =>
+            handleFirestoreError(err, OperationType.WRITE, `images/${json.imageId}`)
+          );
+        }
       }
-    } catch (err) {
-      console.error('Image upload failed', err);
+    } catch {
+      // Static deployments (e.g. Vercel) do not expose /api/images/upload; compressed data URL works directly
     }
-    return imageUrl;
+
+    return compressedDataUrl;
   };
 
   const toggleSoundMute = () => {
@@ -918,7 +970,7 @@ function SonuBhattiAppContent() {
         writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, activeProducts);
       }
     }, (error) => {
-      console.warn('Firestore Products listener error:', error);
+      handleFirestoreError(error, OperationType.GET, 'products');
     });
 
     // 2. Listen for Settings changes
@@ -931,7 +983,7 @@ function SonuBhattiAppContent() {
         }
       });
     }, (error) => {
-      console.warn('Firestore Settings listener error:', error);
+      handleFirestoreError(error, OperationType.GET, 'settings');
     });
 
     // 3. Listen for Orders changes
@@ -948,7 +1000,7 @@ function SonuBhattiAppContent() {
         setAllOrders(allOrdersList);
       }
     }, (error) => {
-      console.warn('Firestore Orders listener error:', error);
+      handleFirestoreError(error, OperationType.GET, 'orders');
     });
 
     // 4. Listen for Stock Movements
@@ -966,7 +1018,7 @@ function SonuBhattiAppContent() {
         writeCache(CACHE_KEYS.ADMIN_MOVEMENTS, allMovementsList);
       }
     }, (error) => {
-      console.warn('Firestore Movements listener error:', error);
+      handleFirestoreError(error, OperationType.GET, 'movements');
     });
 
     return () => {
@@ -1120,11 +1172,11 @@ function SonuBhattiAppContent() {
     });
 
     const clientActionId = `create_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    let preparedImageUrl = data.imageUrl;
     try {
       if (isOnline && authToken) {
-        // Upload image if it's base64 before creating the product
-        const finalImageUrl = await uploadImageIfBase64(data.imageUrl, authToken);
-        const finalData = { ...data, imageUrl: finalImageUrl };
+        preparedImageUrl = await uploadImageIfBase64(data.imageUrl, authToken);
+        const finalData = { ...data, imageUrl: preparedImageUrl };
 
         const res = await fetch('/api/admin/products', {
           method: 'POST',
@@ -1136,7 +1188,9 @@ function SonuBhattiAppContent() {
         });
         if (res.ok) {
           const json = await res.json();
-          const serverProduct: Product | undefined = json.product;
+          const serverProduct: Product | undefined = json.product
+            ? { ...json.product, imageUrl: preparedImageUrl }
+            : undefined;
           if (serverProduct) {
             setAdminProducts((prev) => {
               const cleaned = prev.filter(
@@ -1154,8 +1208,9 @@ function SonuBhattiAppContent() {
               writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, updated);
               return updated;
             });
-            // Direct Firestore broadcast for instant multi-browser live sync
-            void setDoc(doc(db, 'products', String(serverProduct.id)), serverProduct);
+            void setDoc(doc(db, 'products', String(serverProduct.id)), serverProduct).catch((err) =>
+              handleFirestoreError(err, OperationType.WRITE, `products/${serverProduct.id}`)
+            );
           }
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
@@ -1163,10 +1218,36 @@ function SonuBhattiAppContent() {
         }
       }
 
+      // Direct Firestore persistence when static deployment (e.g. Vercel) has no /api/admin/products backend
+      if (isOnline) {
+        const maxId = adminProducts.reduce((max, p) => (p.id > max ? p.id : max), 0);
+        const firestoreId = maxId + 1;
+        const persistedProduct: Product = {
+          ...optimisticProduct,
+          id: firestoreId,
+          imageUrl: preparedImageUrl,
+        };
+        await setDoc(doc(db, 'products', String(firestoreId)), persistedProduct);
+        setAdminProducts((prev) => {
+          const cleaned = prev.filter((p) => p.id !== tempId && p.id !== firestoreId);
+          const updated = [persistedProduct, ...cleaned];
+          writeCache(CACHE_KEYS.ADMIN_PRODUCTS, updated);
+          return updated;
+        });
+        setPublicProducts((prev) => {
+          const cleaned = prev.filter((p) => p.id !== tempId && p.id !== firestoreId);
+          const updated = [persistedProduct, ...cleaned];
+          writeCache(CACHE_KEYS.PUBLIC_PRODUCTS, updated);
+          return updated;
+        });
+        return;
+      }
+
       // Offline fallback: enqueue action while keeping optimistic product in UI
-      enqueueOfflineAction('CREATE_PRODUCT', data, `Add ${data.name}`);
-    } catch {
-      enqueueOfflineAction('CREATE_PRODUCT', data, `Add ${data.name}`);
+      enqueueOfflineAction('CREATE_PRODUCT', { ...data, imageUrl: preparedImageUrl }, `Add ${data.name}`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'products');
+      enqueueOfflineAction('CREATE_PRODUCT', { ...data, imageUrl: preparedImageUrl }, `Add ${data.name}`);
     } finally {
       setTimeout(() => {
         createInFlightRef.current.delete(dedupeKey);
@@ -1216,9 +1297,9 @@ function SonuBhattiAppContent() {
     });
 
     const clientActionId = `upd_${productId}_${Date.now()}`;
+    let finalData = { ...data };
     if (isOnline && authToken) {
       try {
-        let finalData = { ...data };
         if (data.imageUrl && data.imageUrl.startsWith('data:')) {
           const uploadedUrl = await uploadImageIfBase64(data.imageUrl, authToken);
           finalData.imageUrl = uploadedUrl;
@@ -1233,19 +1314,41 @@ function SonuBhattiAppContent() {
           body: JSON.stringify({ ...finalData, clientActionId }),
         });
         if (res.ok) {
-          void setDoc(doc(db, 'products', String(productId)), finalData, { merge: true });
+          void setDoc(
+            doc(db, 'products', String(productId)),
+            { ...finalData, updatedAt: new Date().toISOString() },
+            { merge: true }
+          ).catch((err) =>
+            handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`)
+          );
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
         }
       } catch {
-        // Fall through to offline queue
+        // Fall through to direct Firestore write / offline queue
+      }
+    }
+
+    if (isOnline) {
+      try {
+        if (finalData.imageUrl && finalData.imageUrl.startsWith('data:')) {
+          finalData.imageUrl = await compressDataUrl(finalData.imageUrl, 800, 220_000);
+        }
+        await setDoc(
+          doc(db, 'products', String(productId)),
+          { ...finalData, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        return;
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`);
       }
     }
 
     enqueueOfflineAction(
       'UPDATE_PRODUCT',
-      { productId, ...data },
+      { productId, ...finalData },
       `Update product #${productId}`
     );
   };
@@ -1298,16 +1401,32 @@ function SonuBhattiAppContent() {
         if (res.ok) {
           const resData = await res.json().catch(() => null);
           const finalStock = resData?.product?.stockQuantity ?? nextStock;
-          void setDoc(doc(db, 'products', String(productId)), { stockQuantity: finalStock }, { merge: true });
+          void setDoc(
+            doc(db, 'products', String(productId)),
+            { stockQuantity: finalStock, updatedAt: new Date().toISOString() },
+            { merge: true }
+          ).catch((err) =>
+            handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`)
+          );
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
-        } else {
-          const errData = await res.json();
-          throw new Error(errData.error || 'Failed to adjust stock');
         }
-      } catch (err: any) {
-        if (isOnline) throw err;
+      } catch {
+        // Fall through to direct Firestore write on static deployments
+      }
+    }
+
+    if (isOnline) {
+      try {
+        await setDoc(
+          doc(db, 'products', String(productId)),
+          { stockQuantity: nextStock, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        return;
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`);
       }
     }
 
@@ -1339,16 +1458,27 @@ function SonuBhattiAppContent() {
 
     if (isOnline && authToken) {
       try {
-        await fetch(`/api/admin/products/${productId}`, {
+        const res = await fetch(`/api/admin/products/${productId}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${authToken}` },
         });
-        void deleteDoc(doc(db, 'products', String(productId)));
-        void fetchAdminDashboard(authToken);
-        void fetchPublicCatalogue();
+        await deleteDoc(doc(db, 'products', String(productId)));
+        if (res.ok) {
+          void fetchAdminDashboard(authToken);
+          void fetchPublicCatalogue();
+        }
         return;
-      } catch {
-        // offline queue
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `products/${productId}`);
+      }
+    }
+
+    if (isOnline) {
+      try {
+        await deleteDoc(doc(db, 'products', String(productId)));
+        return;
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `products/${productId}`);
       }
     }
 
@@ -1358,7 +1488,7 @@ function SonuBhattiAppContent() {
   const handleDeleteAll = async () => {
     if (isOnline && authToken) {
       try {
-        await fetch('/api/admin/products/delete-all', {
+        await fetch('/api/admin/products', {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${authToken}` },
         });
@@ -1394,12 +1524,32 @@ function SonuBhattiAppContent() {
           body: JSON.stringify(data),
         });
         if (res.ok) {
+          void setDoc(
+            doc(db, 'settings', 'global'),
+            { ...data, updatedAt: new Date().toISOString() },
+            { merge: true }
+          ).catch((err) =>
+            handleFirestoreError(err, OperationType.UPDATE, 'settings/global')
+          );
           void fetchAdminDashboard(authToken);
           void fetchPublicCatalogue();
           return;
         }
       } catch {
-        // offline queue
+        // Fall through to direct Firestore write
+      }
+    }
+
+    if (isOnline) {
+      try {
+        await setDoc(
+          doc(db, 'settings', 'global'),
+          { ...data, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        return;
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
       }
     }
 
@@ -1580,6 +1730,24 @@ function SonuBhattiAppContent() {
             for instructions to update your account.
           </span>
         </div>
+      )}
+
+      {/* Floating About Us ("!") Button - Top Left */}
+      {viewMode !== 'about' && (
+        <motion.button
+          type="button"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            audioFeedback.play('click');
+            handleNavigate('about');
+          }}
+          aria-label="About Us"
+          title="About Us"
+          className="fixed top-6 left-6 z-40 p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer"
+        >
+          <AlertCircle className="w-6 h-6 text-zinc-900 dark:text-zinc-50" />
+        </motion.button>
       )}
 
       {/* Floating Settings Button - Top Right */}
